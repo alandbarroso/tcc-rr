@@ -31,6 +31,9 @@ public final class LaunchLTIAgents {
 	 */
 	public static void main(String[] args) {
 		Logger.setLogContext("lti");
+		
+		//TODO: Remove comment
+		
 		try {
 			Registry.SYSTEM_REGISTRY
 					.registerEntityFactory(StandardEntityFactory.INSTANCE);
