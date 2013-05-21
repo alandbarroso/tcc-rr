@@ -1,6 +1,5 @@
 package lti;
 
-
 import java.io.IOException;
 
 import lti.agent.ambulance.LTIAmbulanceTeam;
