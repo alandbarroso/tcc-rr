@@ -52,6 +52,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		}
 
 		state = State.RANDOM_WALKING;
+
+		System.out.println("ID " + me().getID());
 	}
 
 	@Override
@@ -266,5 +268,11 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			target = null;
 		}
 
+	}
+
+	private void logInfo(int time, String s) {
+		System.out.println("FireB - Time " + time + " - ID " +
+				me().getID() + " - Pos: (" + me().getX() + "," + me().getY() +
+				") - " + s);
 	}
 }

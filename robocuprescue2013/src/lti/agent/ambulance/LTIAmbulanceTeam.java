@@ -64,6 +64,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		safeBuildings = new HashSet<EntityID>();
 
 		state = State.RANDOM_WALKING;
+		System.out.println("ID " + me().getID());
 	}
 
 	@Override

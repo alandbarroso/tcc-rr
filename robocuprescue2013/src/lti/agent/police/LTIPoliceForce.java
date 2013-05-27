@@ -100,8 +100,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		sector = sectorsList.get(policeForcesList.indexOf(me().getID())
 				% numberOfDivisions);
 
-		System.out.println(": ID " + me().getID() + ", sector "
-				+ sector.getIndex());
+		System.out.println("ID " + me().getID() + ", sector " + sector.getIndex());
 
 		/*
 		 * placesToCheck = new
@@ -191,13 +190,11 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				state = State.CLEARING;
 				sendClear(time, target);
 
-				System.out.println(time + ": " + me().getID() + " "
-						+ state.toString() + " " + target);
+				logInfo(time, state.toString() + " " + target);
 				return;
 			}
 
-			System.out.println(time + ": " + me().getID() + " target " + target
-					+ " out of reach");
+			logInfo(time, "target " + target + " out of reach");
 
 			List<EntityID> path;
 			Blockade targetBlockade = (Blockade) model.getEntity(target);
@@ -205,15 +202,13 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			if (sector.getLocations().keySet().contains(currentPosition)) {
 				path = search.breadthFirstSearch(currentPosition, sector,
 						targetBlockade.getPosition());
-				System.out.println(time + ": " + me().getID() + " target "
-						+ target + " inside sector");
-				System.out.println("neighbours of " + currentPosition + ": "
+				logInfo(time, "target " + target + " inside sector");
+				logInfo(time, "neighbours of " + currentPosition + ": "
 						+ sector.getNeighbours(currentPosition));
 			} else {
 				path = search.breadthFirstSearch(currentPosition,
 						targetBlockade.getPosition());
-				System.out.println(time + ": " + me().getID()
-						+ " outside sector");
+				logInfo(time, "outside sector");
 			}
 
 			if (path != null) {
@@ -221,13 +216,11 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				sendMove(time, path, targetBlockade.getX(),
 						targetBlockade.getY());
 
-				System.out.println(time + ": " + me().getID() + " "
-						+ state.toString() + " " + target);
+				logInfo(time, state.toString() + " " + target);
 				return;
 			}
 
-			System.out.println(time + ": " + me().getID()
-					+ " no path to target " + target);
+			logInfo(time, "no path to target " + target);
 		}
 
 		// Move around the map
@@ -246,8 +239,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		if (path != null) {
 			sendMove(time, path);
 
-			System.out.println(time + ": " + me().getID() + " "
-					+ state.toString());
+			logInfo(time, state.toString());
 			return;
 		}
 	}
@@ -829,6 +821,12 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			}
 		} catch (IOException e) {
 		}
+	}
+	
+	private void logInfo(int time, String s) {
+		System.out.println("PoliceF - Time " + time + " - ID " +
+				me().getID() + " - Pos: (" + me().getX() + "," + me().getY() +
+				") - " + s);
 	}
 }
 
