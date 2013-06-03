@@ -2,20 +2,20 @@
 <classpath>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/clear.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/collapse.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/gis2.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/handy.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/human.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/ignition.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/kernel.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/maps.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/misc.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/rescuecore2.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/resq-fire.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/sample.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/standard.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/traffic3.jar"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/clear.jar" sourcepath="Simuladores/roborescue-2013/modules/clear/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/collapse.jar" sourcepath="Simuladores/roborescue-2013/modules/collapse/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/gis2.jar" sourcepath="Simuladores/roborescue-2013/modules/gis2/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/handy.jar" sourcepath="Simuladores/roborescue-2013/modules/handy/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/human.jar" sourcepath="Simuladores/roborescue-2013/modules/human/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/ignition.jar" sourcepath="Simuladores/roborescue-2013/modules/ignition/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/kernel.jar" sourcepath="Simuladores/roborescue-2013/modules/kernel/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/maps.jar" sourcepath="Simuladores/roborescue-2013/modules/maps/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/misc.jar" sourcepath="Simuladores/roborescue-2013/modules/misc/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/rescuecore2.jar" sourcepath="Simuladores/roborescue-2013/modules/rescuecore2/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/resq-fire.jar" sourcepath="Simuladores/roborescue-2013/modules/resq-fire/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/sample.jar" sourcepath="Simuladores/roborescue-2013/modules/sample/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/standard.jar" sourcepath="Simuladores/roborescue-2013/modules/standard/src"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/jars/traffic3.jar" sourcepath="Simuladores/roborescue-2013/modules/traffic3/src"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/commons-logging-1.1.1.jar"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/dom4j.jar"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/jaxen-1.1.1.jar"/>
@@ -27,7 +27,7 @@
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/junit-4.5.jar"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/log4j-1.2.15.jar"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/rescuecore.jar"/>
-	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/resq-fire.jar"/>
+	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/resq-fire.jar" sourcepath="Simuladores/roborescue-2013/modules/resq-fire/src"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/trove-0.1.8.jar"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/uncommons-maths-1.2.jar"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/xml-0.0.6.jar"/>

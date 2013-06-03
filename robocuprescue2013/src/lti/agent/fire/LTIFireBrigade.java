@@ -269,7 +269,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		}
 
 	}
-
+	
+	@SuppressWarnings("unused")
 	private void logInfo(int time, String s) {
 		System.out.println("FireB - Time " + time + " - ID " +
 				me().getID() + " - Pos: (" + me().getX() + "," + me().getY() +

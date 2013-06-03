@@ -122,7 +122,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		// Work on the task, if you have one
 		if (target != null) {
 			// Am I carrying a civilian?
-			if (targetOnBoard()) {
+			if (targetOnBoard(time)) {
 				state = State.CARRYING_CIVILIAN;
 				// Am I at a refuge?
 				if (refuges.contains(currentPosition)) {
@@ -193,7 +193,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	 * 
 	 * @return true if the ambulance is carrying a civilian, false otherwise.
 	 */
-	private boolean targetOnBoard() {
+	private boolean targetOnBoard(int time) {
 		// FIXME deu null pointer aqui
 		if (((Human) model.getEntity(target)).isPositionDefined()) {
 			if (((Human) model.getEntity(target)).getPosition().equals(
@@ -203,7 +203,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 			return false;
 		}
 
-		System.out.println(getID() + ": posicao nao definida");
+		logInfo(time, "posicao nao definida");
 		return false;
 	}
 
@@ -409,10 +409,10 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 	@Override
 	protected void dropTask(int time, ChangeSet changed) {
-		if (!taskTable.keySet().contains(target) && !targetOnBoard()) {
+		if (!taskTable.keySet().contains(target) && !targetOnBoard(time)) {
 			taskDropped = target;
 			target = null;
-		} else if (amIBlocked(time) && !targetOnBoard()) {
+		} else if (amIBlocked(time) && !targetOnBoard(time)) {
 			taskDropped = target;
 			target = null;
 		}
@@ -420,5 +420,11 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		// TODO tempo limite estourará?
 
 		// TODO existe tarefa mais vantajosa?
+	}
+
+	private void logInfo(int time, String s) {
+		System.out.println("AmbT - Time " + time + " - ID " +
+				me().getID() + " - Pos: (" + me().getX() + "," + me().getY() +
+				") - " + s);
 	}
 }

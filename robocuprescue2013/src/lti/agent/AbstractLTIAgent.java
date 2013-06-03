@@ -122,16 +122,14 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		model.indexClass(StandardEntityURN.BUILDING);
 
 		buildingIDs = new HashSet<EntityID>();
-
 		roadIDs = new HashSet<EntityID>();
 
 		for (StandardEntity next : model) {
 			if (next instanceof Building) {
 				buildingIDs.add(next.getID());
-			} else {
-				if (next instanceof Road) {
-					roadIDs.add(next.getID());
-				}
+			}
+			if (next instanceof Road) {
+				roadIDs.add(next.getID());
 			}
 		}
 
@@ -183,9 +181,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		taskDropped = null;
 
 		// Subscribe to a communication channel
-		if (time == this.config
-				.getIntValue(kernel.KernelConstants.IGNORE_AGENT_COMMANDS_KEY)) {
-
+		if (time == config.getIntValue(kernel.KernelConstants.IGNORE_AGENT_COMMANDS_KEY)) {
 			if (channelComm) {
 				for (int i = 1; i <= numChannels; i++) {
 					channelList.add(new Integer(i));

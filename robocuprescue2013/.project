@@ -14,4 +14,11 @@
 	<natures>
 		<nature>org.eclipse.jdt.core.javanature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>modules</name>
+			<type>2</type>
+			<location>/home/victor/git/tcc-rr/robocuprescue2013/Simuladores/roborescue-2013/modules</location>
+		</link>
+	</linkedResources>
 </projectDescription>
