@@ -44,7 +44,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private State state;
 
 	private static enum State {
-		MOVING_TO_ROAD, RETURNING_TO_SECTOR, MOVING_TO_BLOCKADE, PATROLLING, RANDOM_WALKING, CLEARING, BURIED, DEAD, CLEARING_PATH
+		RETURNING_TO_SECTOR, MOVING_TO_BLOCKADE, RANDOM_WALKING, PATROLLING,
+		CLEARING, BURIED, DEAD, CLEARING_PATH
 	};
 
 	private EntityID obstructingBlockade;
@@ -59,7 +60,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		distance = config.getIntValue(DISTANCE_KEY);
 
-		state = State.RANDOM_WALKING;
+		changeState(State.RANDOM_WALKING);
 
 		obstructingBlockade = null;
 
@@ -108,8 +109,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		currentY = me().getY();
 
 		if (me().getHP() == 0) {
-			state = State.DEAD;
-
+			changeState(State.DEAD);
 			return;
 		}
 
@@ -121,8 +121,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		 */
 
 		if (me().getBuriedness() != 0) {
-			state = State.BURIED;
-
+			changeState(State.BURIED);
 			return;
 		}
 
@@ -131,7 +130,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		// Am I stuck?
 		// if (amIBlocked(time) && obstructingBlockade == null) {
 		if (amIBlocked(time) && state.compareTo(State.PATROLLING) < 0) {
-			state = State.CLEARING_PATH;
+			changeState(State.CLEARING_PATH);
 			obstructingBlockade = getClosestBlockade();
 		}
 
@@ -162,7 +161,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 					model.getEntity(obstructingBlockade))
 					&& model.getDistance(me().getID(), obstructingBlockade) < distance) {
 				sendClear(time, obstructingBlockade);
-
+				log("Sent clear to remove the obstructing blockade: " + obstructingBlockade);
 				return;
 			}
 		}
@@ -171,14 +170,13 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		if (target != null) {
 			// Is the target visible and inside clearing range?
 			if (blockadeInRange(target, changed)) {
-				state = State.CLEARING;
+				changeState(State.CLEARING);
 				sendClear(time, target);
-
-				logInfo(time, state.toString() + " " + target);
+				log("Sent clear to remove the target: " + target);
 				return;
 			}
 
-			logInfo(time, "target " + target + " out of reach");
+			log("Target " + target + " out of direct reach");
 
 			List<EntityID> path;
 			Blockade targetBlockade = (Blockade) model.getEntity(target);
@@ -186,25 +184,24 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			if (sector.getLocations().keySet().contains(currentPosition)) {
 				path = search.breadthFirstSearch(currentPosition, sector,
 						targetBlockade.getPosition());
-				logInfo(time, "target " + target + " inside sector");
-				logInfo(time, "neighbours of " + currentPosition + ": "
+				log("I'm inside my sector");
+				log("Neighbours of " + currentPosition + ": "
 						+ sector.getNeighbours(currentPosition));
 			} else {
 				path = search.breadthFirstSearch(currentPosition,
 						targetBlockade.getPosition());
-				logInfo(time, "outside sector");
+				log("I'm outside my sector");
 			}
 
 			if (path != null) {
-				state = State.MOVING_TO_BLOCKADE;
+				changeState(State.MOVING_TO_BLOCKADE);
 				sendMove(time, path, targetBlockade.getX(),
 						targetBlockade.getY());
-
-				logInfo(time, state.toString() + " " + target);
+				log("Found path and sent move to target: " + target);
 				return;
 			}
 
-			logInfo(time, "no path to target " + target);
+			log("No path to target: " + target);
 		}
 
 		// Move around the map
@@ -212,24 +209,23 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		if (sector.getLocations().keySet().contains(currentPosition)) {
 			path = randomWalk(time);
-			state = State.RANDOM_WALKING;
+			changeState(State.RANDOM_WALKING);
 		} else {
 			List<EntityID> local = new ArrayList<EntityID>(sector
 					.getLocations().keySet());
 			path = search.breadthFirstSearch(currentPosition, local.get(0));
-			state = State.RETURNING_TO_SECTOR;
+			changeState(State.RETURNING_TO_SECTOR);
 		}
 
 		if (path != null) {
 			sendMove(time, path);
-
-			logInfo(time, state.toString());
+			log("Sent move");
 			return;
 		}
 	}
 
 	/**
-	 * Get the blockade with the best socring function.
+	 * Get the blockade with the best scoring function.
 	 * 
 	 * @param blockades
 	 *            The set of blockades known.
@@ -807,10 +803,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		}
 	}
 	
-	private void logInfo(int time, String s) {
-		System.out.println("PoliceF - Time " + time + " - ID " +
-				me().getID() + " - Pos: (" + me().getX() + "," + me().getY() +
-				") - " + s);
+	private void changeState(State state) {
+		this.state = state;
+		log("Changed state to: " + this.state);
 	}
 }
 
