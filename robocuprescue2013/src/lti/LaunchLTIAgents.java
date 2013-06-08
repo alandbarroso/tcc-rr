@@ -73,17 +73,20 @@ public final class LaunchLTIAgents {
 	 */
 	private static void connect(String classname, int max_agents)
 			throws InterruptedException, ConnectionException {
-		System.out.println("Started launching " + classname + "s >>>");
+		String[] cnsplit = classname.split("[.]");
+		String agentname = cnsplit[cnsplit.length - 1];
+		
+		System.out.println("Started launching " + agentname + "s >>>");
 		try {
 			for (int i = 1; i < max_agents; i++) {
-				System.out.print("Launching " + classname + " " + i + "... ");
+				System.out.print("Launching " + agentname + " " + i + "... ");
 				launcher.connect((Component) Class.forName(classname).newInstance());
-				System.out.println(classname + " " + i + " launched.");
+				System.out.println(agentname + " " + i + " launched.");
 			}
 		} catch (Exception e) {
 			System.out.println(e.getMessage());
 		}
-		System.out.println("<<< Finished launching " + classname + "s.");
+		System.out.println("<<< Finished launching " + agentname + "s.");
 		System.out.println();
 	}
 }
