@@ -48,6 +48,9 @@ public final class LaunchLTIAgents {
 			connectPlatoon("lti.agent.ambulance.LTIAmbulanceTeam");
 
 			connectCentre("sample.SampleCentre");
+
+			//TODO: Remove this code for the competition
+			connect("sample.SampleCivilian", 1000);
 			
 		} catch (Exception e) {
 			Logger.error("Error connecting agents", e);

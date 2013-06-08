@@ -105,6 +105,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	protected int currentY;
 	
 	protected int currentTime;
+	
+	protected int internalID;
 
 	protected EntityID target;
 
@@ -129,6 +131,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		lastX = 0;
 		lastY = 0;
 		currentTime = 0;
+		internalID = 0;
 
 		model.indexClass(StandardEntityURN.BUILDING);
 
@@ -825,7 +828,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		String[] type_agent = me().getURN().split(":");
 
 		String msg_erro =
-				type_agent[type_agent.length - 1] +
+				type_agent[type_agent.length - 1] + internalID + 
 			" - Time: " + currentTime +
 			" - ID: " + me().getID() +
 			" - Pos: (" + currentX + "," + currentY + ")";

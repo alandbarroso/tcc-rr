@@ -60,12 +60,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		currentX = me().getX();
 		currentY = me().getY();
 
-		distance = config.getIntValue(DISTANCE_KEY);
-
-		changeState(State.RANDOM_WALKING);
-
-		obstructingBlockade = null;
-
 		Set<EntityID> policeForces = new TreeSet<EntityID>(
 				new EntityIDComparator());
 
@@ -75,6 +69,14 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		}
 
 		policeForcesList = new ArrayList<EntityID>(policeForces);
+		
+		internalID = policeForcesList.indexOf(me().getID()) + 1;
+		
+		distance = config.getIntValue(DISTANCE_KEY);
+
+		changeState(State.RANDOM_WALKING);
+
+		obstructingBlockade = null;
 		
 		numberOfDivisions = defineNumberOfDivisions();
 
@@ -100,7 +102,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	 */
 	private Sector defineSector(Set<Sector> sectors) {
 		List<Sector> sectorsList = new ArrayList<Sector>(sectors);
-		int mypos = policeForcesList.indexOf(me().getID());
+		int mypos = internalID;
 		int nPolice = policeForcesList.size();
 
 		int nEntitiesTotal = 0;
