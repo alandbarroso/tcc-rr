@@ -1,7 +1,5 @@
 package lti.agent;
 
-//TODO implementar checksum
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -97,6 +95,16 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	protected EntityID lastPosition;
 
 	protected EntityID currentPosition;
+	
+	protected int lastX;
+
+	protected int lastY;
+
+	protected int currentX;
+
+	protected int currentY;
+	
+	protected int currentTime;
 
 	protected EntityID target;
 
@@ -118,6 +126,9 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	@Override
 	protected void postConnect() {
 		super.postConnect();
+		lastX = 0;
+		lastY = 0;
+		currentTime = 0;
 
 		model.indexClass(StandardEntityURN.BUILDING);
 
@@ -178,6 +189,9 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		lastPosition = currentPosition;
 		currentPosition = location().getID();
+		lastX = currentX;
+		lastY = currentY;
+		currentTime = time;	
 		taskDropped = null;
 
 		// Subscribe to a communication channel
@@ -805,5 +819,18 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 
 	protected EntityID selectTask() {
 		return new EntityID(0);
+	}
+	
+	protected void log(String s) {
+		String[] type_agent = me().getURN().split(":");
+
+		String msg_erro =
+				type_agent[type_agent.length - 1] +
+			" - Time: " + currentTime +
+			" - ID: " + me().getID() +
+			" - Pos: (" + currentX + "," + currentY + ")";
+		if (s != "")
+			msg_erro += " - " + s;
+		System.out.println(msg_erro);
 	}
 }
