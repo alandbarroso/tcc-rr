@@ -51,6 +51,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private EntityID obstructingBlockade;
 
 	private int numberOfDivisions;
+	
+	List<EntityID> policeForcesList;
 
 	@Override
 	protected void postConnect() {
@@ -72,9 +74,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			policeForces.add(e.getID());
 		}
 
-		numberOfDivisions = policeForces.size() / 2;
-
-		List<EntityID> policeForcesList = new ArrayList<EntityID>(policeForces);
+		policeForcesList = new ArrayList<EntityID>(policeForces);
+		
+		numberOfDivisions = defineNumberOfDivisions();
 
 		Set<Sector> sectors = sectorize(numberOfDivisions);
 
@@ -82,12 +84,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		createDotFile(sectors, "setor");
 
-		List<Sector> sectorsList = new ArrayList<Sector>(sectors);
-
-		sector = sectorsList.get(policeForcesList.indexOf(me().getID())
-				% numberOfDivisions);
-
-		System.out.println("ID " + me().getID() + ", sector " + sector.getIndex());
+		sector = defineSector(sectors);
+		log("Defined sector: " + sector);
 
 		/*
 		 * placesToCheck = new
@@ -95,6 +93,55 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		 */
 		// Collections.shuffle(placesToCheck, new
 		// Random(me().getID().getValue()));
+	}
+
+	/**
+	 * @param sectors
+	 */
+	private Sector defineSector(Set<Sector> sectors) {
+		List<Sector> sectorsList = new ArrayList<Sector>(sectors);
+		int mypos = policeForcesList.indexOf(me().getID());
+		int nPolice = policeForcesList.size();
+
+		int nEntitiesTotal = 0;
+		for (Sector next: sectorsList)
+			nEntitiesTotal += next.getLocations().keySet().size();
+		
+		
+		if (mypos < sectorsList.size())
+			return sectorsList.get(mypos);
+		
+		mypos -= sectorsList.size();
+		nPolice -= sectorsList.size();
+		int nEntities = 0;
+		for (Sector next: sectorsList) {
+			nEntities += next.getLocations().keySet().size();
+			if (((double)(mypos+1)/nPolice) <=
+					((double)nEntities/nEntitiesTotal))
+				return next;
+		}
+
+		return sectorsList.get(0);
+	}
+
+	/**
+	 * Try to define the number of divisions which can maximize
+	 * the performance of the sectorization
+	 * @return numberOfDivisions
+	 */
+	private int defineNumberOfDivisions() {
+		int numberOfDivisions = 1;
+		int numberOfPoliceForces = policeForcesList.size();
+		
+		if (numberOfPoliceForces > 1)
+			numberOfDivisions = numberOfPoliceForces / 2;
+		
+		Pair<Integer, Integer> factors = factorization(numberOfDivisions);
+		// Prime numbers bigger than 3 (5, 7, 11, ...)
+		if (factors.first() == 1 && factors.second() > 3)
+			numberOfDivisions--;
+		
+		return numberOfDivisions;
 	}
 
 	@Override
@@ -219,7 +266,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		if (path != null) {
 			sendMove(time, path);
-			log("Sent move");
+			log("Path calculated and sent move");
 			return;
 		}
 	}
@@ -434,23 +481,25 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		int heightDivisions;
 
 		if (length < height) {
-			lengthDivisions = factors.second();
-			heightDivisions = factors.first();
-		} else {
 			lengthDivisions = factors.first();
 			heightDivisions = factors.second();
+		} else {
+			lengthDivisions = factors.second();
+			heightDivisions = factors.first();
 		}
 
 		// Divide the map into sectors
 		Set<Sector> sectors = new TreeSet<Sector>();
 
-		for (int i = 1; i <= heightDivisions; i++) {
-			for (int j = 1; j <= lengthDivisions; j++) {
-				sectors.add(new Sector(minX + (length * (j - 1))
-						/ lengthDivisions, minY + (height * (i - 1))
-						/ heightDivisions, minX + (length * j)
-						/ lengthDivisions, minY + (height * i)
-						/ heightDivisions, lengthDivisions * (i - 1) + j));
+		for (int i = 0; i < heightDivisions; i++) {
+			for (int j = 0; j < lengthDivisions; j++) {
+				sectors.add(new Sector(
+						minX + (length * j) / lengthDivisions,
+						minY + (height * i) / heightDivisions,
+						minX + (length * (j + 1)) / lengthDivisions,
+						minY + (height * (i + 1)) / heightDivisions,
+						lengthDivisions * i + j + 1)
+				);
 			}
 		}
 
@@ -668,20 +717,10 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	 * @return The pair of factors obtained.
 	 */
 	private Pair<Integer, Integer> factorization(int n) {
-		Pair<Integer, Integer> result = null;
-		int difference = Integer.MAX_VALUE;
-
-		for (int i = 1; i <= (int) Math.sqrt(n); i++) {
-			if (n % i == 0) {
-				if ((n - n / i) < difference && (n - n / i) >= 0) {
-					result = new Pair<Integer, Integer>(new Integer(i),
-							new Integer(n / i));
-					difference = n - n / i;
-				}
-			}
-		}
-
-		return result;
+		for (int i = (int) Math.sqrt(n); i >= 1; i--)
+			if (n % i == 0)
+				return new Pair<Integer, Integer>(i, n / i);
+		return new Pair<Integer, Integer>(1, n);
 	}
 
 	private List<EntityID> randomWalk(int time) {

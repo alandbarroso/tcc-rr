@@ -79,7 +79,7 @@ public final class LaunchLTIAgents {
 		System.out.println("Started launching " + agentname + "s >>>");
 		try {
 			for (int i = 1; i < max_agents; i++) {
-				System.out.print("Launching " + agentname + " " + i + "... ");
+				System.out.println("Launching " + agentname + " " + i + "... ");
 				launcher.connect((Component) Class.forName(classname).newInstance());
 				System.out.println(agentname + " " + i + " launched.");
 			}
