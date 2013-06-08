@@ -43,14 +43,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 	private State state;
 
-	protected int lastX;
-
-	protected int lastY;
-
-	protected int currentX;
-
-	protected int currentY;
-
 	private static enum State {
 		MOVING_TO_ROAD, RETURNING_TO_SECTOR, MOVING_TO_BLOCKADE, PATROLLING, RANDOM_WALKING, CLEARING, BURIED, DEAD, CLEARING_PATH
 	};
@@ -62,20 +54,14 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	@Override
 	protected void postConnect() {
 		super.postConnect();
+		currentX = me().getX();
+		currentY = me().getY();
 
 		distance = config.getIntValue(DISTANCE_KEY);
 
 		state = State.RANDOM_WALKING;
 
 		obstructingBlockade = null;
-
-		lastX = 0;
-
-		lastY = 0;
-
-		currentX = me().getX();
-
-		currentY = me().getY();
 
 		Set<EntityID> policeForces = new TreeSet<EntityID>(
 				new EntityIDComparator());
@@ -118,8 +104,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	@Override
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
-		lastX = currentX;
-		lastY = currentY;
 		currentX = me().getX();
 		currentY = me().getY();
 
@@ -832,8 +816,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 class EntityIDComparator implements Comparator<EntityID> {
 
-	public EntityIDComparator() {
-	}
+	public EntityIDComparator() {}
 
 	@Override
 	public int compare(EntityID a, EntityID b) {
