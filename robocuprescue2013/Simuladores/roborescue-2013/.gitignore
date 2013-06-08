@@ -16,3 +16,6 @@ jars/
 jars-instrumented/
 lib/rescuecore.jar
 lib/resq-fire.jar
+
+# Ignore .rays files
+*.rays
