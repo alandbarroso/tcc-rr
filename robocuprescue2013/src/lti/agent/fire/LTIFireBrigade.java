@@ -30,7 +30,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private List<EntityID> refuges;
 
 	private static enum State {
-		MOVING_TO_REFUGEE, MOVING_TO_FIRE, EXTINGUISHING_FIRE, REFILLING, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE, DEAD, BURIED
+		MOVING_TO_REFUGEE, MOVING_TO_FIRE, EXTINGUISHING_FIRE, REFILLING,
+		RANDOM_WALKING, TAKING_ALTERNATE_ROUTE, DEAD, BURIED
 	};
 
 	private State state;
@@ -38,6 +39,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	@Override
 	protected void postConnect() {
 		super.postConnect();
+		currentX = me().getX();
+		currentY = me().getY();
 
 		model.indexClass(StandardEntityURN.BUILDING, StandardEntityURN.REFUGE);
 		maxWater = config.getIntValue(MAX_WATER_KEY);
@@ -51,9 +54,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			refuges.add(r.getID());
 		}
 
-		state = State.RANDOM_WALKING;
-
-		System.out.println("ID " + me().getID());
+		changeState(State.RANDOM_WALKING);
 	}
 
 	@Override
@@ -63,16 +64,16 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
+		currentX = me().getX();
+		currentY = me().getY();
 
 		if (me().getHP() == 0) {
-			state = State.DEAD;
-
+			changeState(State.DEAD);
 			return;
 		}
 
 		if (me().getBuriedness() != 0) {
-			state = State.BURIED;
-
+			changeState(State.BURIED);
 			return;
 		}
 
@@ -104,8 +105,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 				List<EntityID> path = randomWalk();
 
 				sendMove(time, path);
-				state = State.RANDOM_WALKING;
-
+				changeState(State.RANDOM_WALKING);
+				log("Leaving a burning building");
 				return;
 			}
 		}
@@ -114,8 +115,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		if (location() instanceof Refuge && me().isWaterDefined()
 				&& me().getWater() < maxWater) {
 			sendRest(time);
-			state = State.REFILLING;
-
+			changeState(State.REFILLING);
 			return;
 		}
 
@@ -123,15 +123,15 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		if (me().isWaterDefined() && me().getWater() == 0) {
 			List<EntityID> path = search.breadthFirstSearch(location().getID(),
 					refuges);
-			state = State.MOVING_TO_REFUGEE;
+			changeState(State.MOVING_TO_REFUGEE);
 
 			if (path == null) {
 				path = randomWalk();
-				state = State.RANDOM_WALKING;
+				log("Trying to move to refugee, but couldn't find path");
+				changeState(State.RANDOM_WALKING);
 			}
 			target = path.get(path.size() - 1);
 			sendMove(time, path);
-
 			return;
 		}
 
@@ -139,18 +139,16 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			if (changed.getChangedEntities().contains(target)
 					&& model.getDistance(location().getID(), target) < maxDistance) {
 				sendExtinguish(time, target, maxPower);
-				state = State.EXTINGUISHING_FIRE;
-
+				changeState(State.EXTINGUISHING_FIRE);
 				return;
 			}
 
-			List<EntityID> path = search.breadthFirstSearch(location().getID(),
-					target);
+			List<EntityID> path = search.breadthFirstSearch(location().getID(), target);
 
 			if (path != null) {
 				path.remove(path.size() - 1);
 				sendMove(time, path);
-				state = State.MOVING_TO_FIRE;
+				changeState(State.MOVING_TO_FIRE);
 
 				if (!path.isEmpty()) {
 					target = path.get(path.size() - 1);
@@ -165,7 +163,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		 * if (blocked) { List<EntityID> path =
 		 * search.pathFinder(currentPosition, getBlockedRoads(), target);
 		 * 
-		 * if (path != null) { state = State.TAKING_ALTERNATE_ROUTE; } else if
+		 * if (path != null) { changeState(State.TAKING_ALTERNATE_ROUTE); } else if
 		 * (state.equals(State.MOVING_TO_FIRE)) { List<EntityID> burning =
 		 * getBurning(); Collections.shuffle(burning, random);
 		 * 
@@ -180,7 +178,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 		List<EntityID> path = randomWalk();
 		sendMove(time, path);
-		state = State.RANDOM_WALKING;
+		changeState(State.RANDOM_WALKING);
 		return;
 	}
 
@@ -270,10 +268,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 	}
 	
-	@SuppressWarnings("unused")
-	private void logInfo(int time, String s) {
-		System.out.println("FireB - Time " + time + " - ID " +
-				me().getID() + " - Pos: (" + me().getX() + "," + me().getY() +
-				") - " + s);
+	private void changeState(State state) {
+		this.state = state;
+		log("Changed state to: " + this.state);
 	}
 }
