@@ -14,9 +14,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
+import lti.utils.EntityIDComparator;
 import rescuecore2.messages.Command;
 import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Building;
@@ -42,6 +44,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	private State state;
 
 	private Set<EntityID> safeBuildings;
+	
+	private List<EntityID> ambulanceTeamsList;
 
 	@Override
 	protected void postConnect() {
@@ -49,6 +53,18 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		currentX = me().getX();
 		currentY = me().getY();
 
+		Set<EntityID> ambulanceTeams = new TreeSet<EntityID>(
+				new EntityIDComparator());
+
+		for (StandardEntity e : model
+				.getEntitiesOfType(StandardEntityURN.AMBULANCE_TEAM)) {
+			ambulanceTeams.add(e.getID());
+		}
+
+		ambulanceTeamsList = new ArrayList<EntityID>(ambulanceTeams);
+		
+		internalID = ambulanceTeamsList.indexOf(me().getID()) + 1;
+		
 		refuges = new ArrayList<EntityID>();
 		Collection<Refuge> ref = getRefuges();
 

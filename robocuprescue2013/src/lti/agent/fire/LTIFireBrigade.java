@@ -30,7 +30,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private int maxDistance;
 	private int maxPower;
 	private List<EntityID> refuges;
-	List<EntityID> fireBrigadesList;
+	private List<EntityID> fireBrigadesList;
 
 	private static enum State {
 		MOVING_TO_REFUGE, MOVING_TO_FIRE, EXTINGUISHING_FIRE, REFILLING,

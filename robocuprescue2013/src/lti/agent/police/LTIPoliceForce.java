@@ -52,7 +52,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 	private int numberOfDivisions;
 	
-	List<EntityID> policeForcesList;
+	private List<EntityID> policeForcesList;
 
 	@Override
 	protected void postConnect() {
