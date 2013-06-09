@@ -43,38 +43,21 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 	private State state;
 
-	protected int lastX;
-
-	protected int lastY;
-
-	protected int currentX;
-
-	protected int currentY;
-
 	private static enum State {
-		MOVING_TO_ROAD, RETURNING_TO_SECTOR, MOVING_TO_BLOCKADE, PATROLLING, RANDOM_WALKING, CLEARING, BURIED, DEAD, CLEARING_PATH
+		RETURNING_TO_SECTOR, MOVING_TO_BLOCKADE, RANDOM_WALKING, PATROLLING,
+		CLEARING, BURIED, DEAD, CLEARING_PATH
 	};
 
 	private EntityID obstructingBlockade;
 
 	private int numberOfDivisions;
+	
+	List<EntityID> policeForcesList;
 
 	@Override
 	protected void postConnect() {
 		super.postConnect();
-
-		distance = config.getIntValue(DISTANCE_KEY);
-
-		state = State.RANDOM_WALKING;
-
-		obstructingBlockade = null;
-
-		lastX = 0;
-
-		lastY = 0;
-
 		currentX = me().getX();
-
 		currentY = me().getY();
 
 		Set<EntityID> policeForces = new TreeSet<EntityID>(
@@ -85,9 +68,17 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			policeForces.add(e.getID());
 		}
 
-		numberOfDivisions = policeForces.size() / 2;
+		policeForcesList = new ArrayList<EntityID>(policeForces);
+		
+		internalID = policeForcesList.indexOf(me().getID()) + 1;
+		
+		distance = config.getIntValue(DISTANCE_KEY);
 
-		List<EntityID> policeForcesList = new ArrayList<EntityID>(policeForces);
+		changeState(State.RANDOM_WALKING);
+
+		obstructingBlockade = null;
+		
+		numberOfDivisions = defineNumberOfDivisions();
 
 		Set<Sector> sectors = sectorize(numberOfDivisions);
 
@@ -95,12 +86,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		createDotFile(sectors, "setor");
 
-		List<Sector> sectorsList = new ArrayList<Sector>(sectors);
-
-		sector = sectorsList.get(policeForcesList.indexOf(me().getID())
-				% numberOfDivisions);
-
-		System.out.println("ID " + me().getID() + ", sector " + sector.getIndex());
+		sector = defineSector(sectors);
+		log("Defined sector: " + sector);
 
 		/*
 		 * placesToCheck = new
@@ -108,6 +95,55 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		 */
 		// Collections.shuffle(placesToCheck, new
 		// Random(me().getID().getValue()));
+	}
+
+	/**
+	 * @param sectors
+	 */
+	private Sector defineSector(Set<Sector> sectors) {
+		List<Sector> sectorsList = new ArrayList<Sector>(sectors);
+		int mypos = internalID;
+		int nPolice = policeForcesList.size();
+
+		int nEntitiesTotal = 0;
+		for (Sector next: sectorsList)
+			nEntitiesTotal += next.getLocations().keySet().size();
+		
+		
+		if (mypos < sectorsList.size())
+			return sectorsList.get(mypos);
+		
+		mypos -= sectorsList.size();
+		nPolice -= sectorsList.size();
+		int nEntities = 0;
+		for (Sector next: sectorsList) {
+			nEntities += next.getLocations().keySet().size();
+			if (((double)(mypos+1)/nPolice) <=
+					((double)nEntities/nEntitiesTotal))
+				return next;
+		}
+
+		return sectorsList.get(0);
+	}
+
+	/**
+	 * Try to define the number of divisions which can maximize
+	 * the performance of the sectorization
+	 * @return numberOfDivisions
+	 */
+	private int defineNumberOfDivisions() {
+		int numberOfDivisions = 1;
+		int numberOfPoliceForces = policeForcesList.size();
+		
+		if (numberOfPoliceForces > 1)
+			numberOfDivisions = numberOfPoliceForces / 2;
+		
+		Pair<Integer, Integer> factors = factorization(numberOfDivisions);
+		// Prime numbers bigger than 3 (5, 7, 11, ...)
+		if (factors.first() == 1 && factors.second() > 3)
+			numberOfDivisions--;
+		
+		return numberOfDivisions;
 	}
 
 	@Override
@@ -118,14 +154,11 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	@Override
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
-		lastX = currentX;
-		lastY = currentY;
 		currentX = me().getX();
 		currentY = me().getY();
 
 		if (me().getHP() == 0) {
-			state = State.DEAD;
-
+			changeState(State.DEAD);
 			return;
 		}
 
@@ -137,8 +170,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		 */
 
 		if (me().getBuriedness() != 0) {
-			state = State.BURIED;
-
+			changeState(State.BURIED);
 			return;
 		}
 
@@ -147,7 +179,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		// Am I stuck?
 		// if (amIBlocked(time) && obstructingBlockade == null) {
 		if (amIBlocked(time) && state.compareTo(State.PATROLLING) < 0) {
-			state = State.CLEARING_PATH;
+			changeState(State.CLEARING_PATH);
 			obstructingBlockade = getClosestBlockade();
 		}
 
@@ -178,7 +210,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 					model.getEntity(obstructingBlockade))
 					&& model.getDistance(me().getID(), obstructingBlockade) < distance) {
 				sendClear(time, obstructingBlockade);
-
+				log("Sent clear to remove the obstructing blockade: " + obstructingBlockade);
 				return;
 			}
 		}
@@ -187,14 +219,13 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		if (target != null) {
 			// Is the target visible and inside clearing range?
 			if (blockadeInRange(target, changed)) {
-				state = State.CLEARING;
+				changeState(State.CLEARING);
 				sendClear(time, target);
-
-				logInfo(time, state.toString() + " " + target);
+				log("Sent clear to remove the target: " + target);
 				return;
 			}
 
-			logInfo(time, "target " + target + " out of reach");
+			log("Target " + target + " out of direct reach");
 
 			List<EntityID> path;
 			Blockade targetBlockade = (Blockade) model.getEntity(target);
@@ -202,25 +233,24 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			if (sector.getLocations().keySet().contains(currentPosition)) {
 				path = search.breadthFirstSearch(currentPosition, sector,
 						targetBlockade.getPosition());
-				logInfo(time, "target " + target + " inside sector");
-				logInfo(time, "neighbours of " + currentPosition + ": "
+				log("I'm inside my sector");
+				log("Neighbours of " + currentPosition + ": "
 						+ sector.getNeighbours(currentPosition));
 			} else {
 				path = search.breadthFirstSearch(currentPosition,
 						targetBlockade.getPosition());
-				logInfo(time, "outside sector");
+				log("I'm outside my sector");
 			}
 
 			if (path != null) {
-				state = State.MOVING_TO_BLOCKADE;
+				changeState(State.MOVING_TO_BLOCKADE);
 				sendMove(time, path, targetBlockade.getX(),
 						targetBlockade.getY());
-
-				logInfo(time, state.toString() + " " + target);
+				log("Found path and sent move to target: " + target);
 				return;
 			}
 
-			logInfo(time, "no path to target " + target);
+			log("No path to target: " + target);
 		}
 
 		// Move around the map
@@ -228,24 +258,23 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		if (sector.getLocations().keySet().contains(currentPosition)) {
 			path = randomWalk(time);
-			state = State.RANDOM_WALKING;
+			changeState(State.RANDOM_WALKING);
 		} else {
 			List<EntityID> local = new ArrayList<EntityID>(sector
 					.getLocations().keySet());
 			path = search.breadthFirstSearch(currentPosition, local.get(0));
-			state = State.RETURNING_TO_SECTOR;
+			changeState(State.RETURNING_TO_SECTOR);
 		}
 
 		if (path != null) {
 			sendMove(time, path);
-
-			logInfo(time, state.toString());
+			log("Path calculated and sent move");
 			return;
 		}
 	}
 
 	/**
-	 * Get the blockade with the best socring function.
+	 * Get the blockade with the best scoring function.
 	 * 
 	 * @param blockades
 	 *            The set of blockades known.
@@ -454,23 +483,25 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		int heightDivisions;
 
 		if (length < height) {
-			lengthDivisions = factors.second();
-			heightDivisions = factors.first();
-		} else {
 			lengthDivisions = factors.first();
 			heightDivisions = factors.second();
+		} else {
+			lengthDivisions = factors.second();
+			heightDivisions = factors.first();
 		}
 
 		// Divide the map into sectors
 		Set<Sector> sectors = new TreeSet<Sector>();
 
-		for (int i = 1; i <= heightDivisions; i++) {
-			for (int j = 1; j <= lengthDivisions; j++) {
-				sectors.add(new Sector(minX + (length * (j - 1))
-						/ lengthDivisions, minY + (height * (i - 1))
-						/ heightDivisions, minX + (length * j)
-						/ lengthDivisions, minY + (height * i)
-						/ heightDivisions, lengthDivisions * (i - 1) + j));
+		for (int i = 0; i < heightDivisions; i++) {
+			for (int j = 0; j < lengthDivisions; j++) {
+				sectors.add(new Sector(
+						minX + (length * j) / lengthDivisions,
+						minY + (height * i) / heightDivisions,
+						minX + (length * (j + 1)) / lengthDivisions,
+						minY + (height * (i + 1)) / heightDivisions,
+						lengthDivisions * i + j + 1)
+				);
 			}
 		}
 
@@ -688,20 +719,10 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	 * @return The pair of factors obtained.
 	 */
 	private Pair<Integer, Integer> factorization(int n) {
-		Pair<Integer, Integer> result = null;
-		int difference = Integer.MAX_VALUE;
-
-		for (int i = 1; i <= (int) Math.sqrt(n); i++) {
-			if (n % i == 0) {
-				if ((n - n / i) < difference && (n - n / i) >= 0) {
-					result = new Pair<Integer, Integer>(new Integer(i),
-							new Integer(n / i));
-					difference = n - n / i;
-				}
-			}
-		}
-
-		return result;
+		for (int i = (int) Math.sqrt(n); i >= 1; i--)
+			if (n % i == 0)
+				return new Pair<Integer, Integer>(i, n / i);
+		return new Pair<Integer, Integer>(1, n);
 	}
 
 	private List<EntityID> randomWalk(int time) {
@@ -823,17 +844,15 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		}
 	}
 	
-	private void logInfo(int time, String s) {
-		System.out.println("PoliceF - Time " + time + " - ID " +
-				me().getID() + " - Pos: (" + me().getX() + "," + me().getY() +
-				") - " + s);
+	private void changeState(State state) {
+		this.state = state;
+		log("Changed state to: " + this.state);
 	}
 }
 
 class EntityIDComparator implements Comparator<EntityID> {
 
-	public EntityIDComparator() {
-	}
+	public EntityIDComparator() {}
 
 	@Override
 	public int compare(EntityID a, EntityID b) {
