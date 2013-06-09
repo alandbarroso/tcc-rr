@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,6 +17,7 @@ import java.util.TreeSet;
 
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
+import lti.utils.EntityIDComparator;
 import area.Sector;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
@@ -847,22 +847,5 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private void changeState(State state) {
 		this.state = state;
 		log("Changed state to: " + this.state);
-	}
-}
-
-class EntityIDComparator implements Comparator<EntityID> {
-
-	public EntityIDComparator() {}
-
-	@Override
-	public int compare(EntityID a, EntityID b) {
-
-		if (a.getValue() < b.getValue()) {
-			return -1;
-		}
-		if (a.getValue() > b.getValue()) {
-			return 1;
-		}
-		return 0;
 	}
 }

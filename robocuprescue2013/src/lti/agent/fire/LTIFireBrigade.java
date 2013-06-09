@@ -6,9 +6,11 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
+import lti.utils.EntityIDComparator;
 import rescuecore2.messages.Command;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.FireBrigade;
@@ -28,6 +30,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private int maxDistance;
 	private int maxPower;
 	private List<EntityID> refuges;
+	List<EntityID> fireBrigadesList;
 
 	private static enum State {
 		MOVING_TO_REFUGEE, MOVING_TO_FIRE, EXTINGUISHING_FIRE, REFILLING,
@@ -41,6 +44,18 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		super.postConnect();
 		currentX = me().getX();
 		currentY = me().getY();
+		
+		Set<EntityID> fireBrigades = new TreeSet<EntityID>(
+				new EntityIDComparator());
+
+		for (StandardEntity e : model
+				.getEntitiesOfType(StandardEntityURN.FIRE_BRIGADE)) {
+			fireBrigades.add(e.getID());
+		}
+
+		fireBrigadesList = new ArrayList<EntityID>(fireBrigades);
+		
+		internalID = fireBrigadesList.indexOf(me().getID()) + 1;
 
 		model.indexClass(StandardEntityURN.BUILDING, StandardEntityURN.REFUGE);
 		maxWater = config.getIntValue(MAX_WATER_KEY);
