@@ -33,7 +33,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	List<EntityID> fireBrigadesList;
 
 	private static enum State {
-		MOVING_TO_REFUGEE, MOVING_TO_FIRE, EXTINGUISHING_FIRE, REFILLING,
+		MOVING_TO_REFUGE, MOVING_TO_FIRE, EXTINGUISHING_FIRE, REFILLING,
 		RANDOM_WALKING, TAKING_ALTERNATE_ROUTE, DEAD, BURIED
 	};
 
@@ -138,7 +138,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		if (me().isWaterDefined() && me().getWater() == 0) {
 			List<EntityID> path = search.breadthFirstSearch(location().getID(),
 					refuges);
-			changeState(State.MOVING_TO_REFUGEE);
+			changeState(State.MOVING_TO_REFUGE);
 
 			if (path == null) {
 				path = randomWalk();
@@ -217,7 +217,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	protected boolean amIBlocked(int time) {
 		if (lastPosition.getValue() == currentPosition.getValue()
 				&& (state.equals(State.MOVING_TO_FIRE) || state
-						.equals(State.MOVING_TO_REFUGEE))
+						.equals(State.MOVING_TO_REFUGE))
 				&& getBlockedRoads().contains(location().getID())) {
 			return true;
 		}
