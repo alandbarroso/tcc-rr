@@ -44,7 +44,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private State state;
 
 	private static enum State {
-		RETURNING_TO_SECTOR, MOVING_TO_BLOCKADE, RANDOM_WALKING, PATROLLING,
+		RETURNING_TO_SECTOR, MOVING_TO_BLOCKADE, RANDOM_WALKING,
 		CLEARING, BURIED, DEAD, CLEARING_PATH
 	};
 
@@ -178,7 +178,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		// Am I stuck?
 		// if (amIBlocked(time) && obstructingBlockade == null) {
-		if (amIBlocked(time) && state.compareTo(State.PATROLLING) < 0) {
+		if (amIBlocked(time) && isMovingState()) {
 			changeState(State.CLEARING_PATH);
 			obstructingBlockade = getClosestBlockade();
 		}
@@ -399,12 +399,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 	@Override
 	protected boolean amIBlocked(int time) {
-		if (state.compareTo(State.PATROLLING) <= 0
-				&& currentPosition.equals(lastPosition) && time > 3) {
-			return true;
-		}
-
-		return false;
+		return lastPosition.getValue() == currentPosition.getValue()
+				&& isMovingState()
+				&& time > 3;
 	}
 
 	/**
@@ -842,6 +839,15 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			}
 		} catch (IOException e) {
 		}
+	}
+	
+	private boolean isMovingState() {
+		List<State> ss = new ArrayList<State>();
+		ss.add(State.RETURNING_TO_SECTOR);
+		ss.add(State.MOVING_TO_BLOCKADE);
+		ss.add(State.RANDOM_WALKING);
+
+		return ss.contains(state);
 	}
 	
 	private void changeState(State state) {

@@ -38,7 +38,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 	private static enum State {
 		CARRYING_CIVILIAN, PATROLLING, TAKING_ALTERNATE_ROUTE,
-		MOVING_TO_TARGET, MOVING_TO_REFUGE, RESCUEING, RANDOM_WALKING, DEAD, BURIED
+		MOVING_TO_TARGET, MOVING_TO_REFUGE, RANDOM_WALKING, RESCUEING, DEAD, BURIED
 	};
 
 	private State state;
@@ -244,12 +244,10 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 	@Override
 	protected boolean amIBlocked(int time) {
-		if (currentPosition.equals(lastPosition) && time > 3
-				&& state.compareTo(State.MOVING_TO_REFUGE) < 0
-				&& getBlockedRoads().contains(currentPosition)) {
-			return true;
-		}
-		return false;
+		return lastPosition.getValue() == currentPosition.getValue()
+				&& isMovingState()
+				&& time > 3
+				&& getBlockedRoads().contains(currentPosition);
 	}
 
 	/**
@@ -444,7 +442,18 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		// TODO existe tarefa mais vantajosa?
 	}
+	
+	private boolean isMovingState() {
+		List<State> ss = new ArrayList<State>();
+		ss.add(State.PATROLLING);
+		ss.add(State.TAKING_ALTERNATE_ROUTE);
+		ss.add(State.MOVING_TO_TARGET);
+		ss.add(State.MOVING_TO_REFUGE);
+		ss.add(State.RANDOM_WALKING);
 
+		return ss.contains(state);
+	}
+	
 	private void changeState(State state) {
 		this.state = state;
 		log("Changed state to: " + this.state);
