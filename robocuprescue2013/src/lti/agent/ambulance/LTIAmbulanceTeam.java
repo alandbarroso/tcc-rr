@@ -14,9 +14,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
+import lti.utils.EntityIDComparator;
 import rescuecore2.messages.Command;
 import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Building;
@@ -35,17 +37,34 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	private List<EntityID> refuges;
 
 	private static enum State {
-		CARRYING_CIVILIAN, PATROLLING, TAKING_ALTERNATE_ROUTE, MOVING_TO_TARGET, MOVING_TO_REFUGE, RESCUEING, RANDOM_WALKING, DEAD, BURIED
+		CARRYING_CIVILIAN, PATROLLING, TAKING_ALTERNATE_ROUTE,
+		MOVING_TO_TARGET, MOVING_TO_REFUGE, RESCUEING, RANDOM_WALKING, DEAD, BURIED
 	};
 
 	private State state;
 
 	private Set<EntityID> safeBuildings;
+	
+	private List<EntityID> ambulanceTeamsList;
 
 	@Override
 	protected void postConnect() {
 		super.postConnect();
+		currentX = me().getX();
+		currentY = me().getY();
 
+		Set<EntityID> ambulanceTeams = new TreeSet<EntityID>(
+				new EntityIDComparator());
+
+		for (StandardEntity e : model
+				.getEntitiesOfType(StandardEntityURN.AMBULANCE_TEAM)) {
+			ambulanceTeams.add(e.getID());
+		}
+
+		ambulanceTeamsList = new ArrayList<EntityID>(ambulanceTeams);
+		
+		internalID = ambulanceTeamsList.indexOf(me().getID()) + 1;
+		
 		refuges = new ArrayList<EntityID>();
 		Collection<Refuge> ref = getRefuges();
 
@@ -63,8 +82,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		safeBuildings = new HashSet<EntityID>();
 
-		state = State.RANDOM_WALKING;
-		System.out.println("ID " + me().getID());
+		changeState(State.RANDOM_WALKING);
 	}
 
 	@Override
@@ -75,14 +93,16 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	@Override
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
+		currentX = me().getX();
+		currentY = me().getY();
 
 		if (me().getHP() == 0) {
-			state = State.DEAD;
+			changeState(State.DEAD);
 			return;
 		}
 
 		if (me().getBuriedness() != 0) {
-			state = State.BURIED;
+			changeState(State.BURIED);
 			return;
 		}
 
@@ -123,20 +143,22 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		if (target != null) {
 			// Am I carrying a civilian?
 			if (targetOnBoard(time)) {
-				state = State.CARRYING_CIVILIAN;
+				changeState(State.CARRYING_CIVILIAN);
 				// Am I at a refuge?
 				if (refuges.contains(currentPosition)) {
 					sendUnload(time);
+					log("I'm at a refuge, so unloading");
 					return;
 				}
 				// No? I need to get to one, then.
 				List<EntityID> path = search.breadthFirstSearch(
 						currentPosition, refuges);
-				state = State.MOVING_TO_REFUGE;
+				changeState(State.MOVING_TO_REFUGE);
 
 				if (path == null) {
 					path = randomWalk();
-					state = State.RANDOM_WALKING;
+					log("Trying to move to refuge, but couldn't find path");
+					changeState(State.RANDOM_WALKING);
 				}
 				sendMove(time, path);
 				return;
@@ -146,16 +168,17 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 				if (victim.getPosition().equals(currentPosition)) {
 					if (victim.getBuriedness() != 0) {
 						sendRescue(time, target);
-						state = State.RESCUEING;
+						changeState(State.RESCUEING);
 					} else if (victim instanceof Civilian) {
 						sendLoad(time, target);
+						log("Loading civilian");
 					}
 					return;
 				} else {
 					List<EntityID> path = search.breadthFirstSearch(
 							currentPosition, victim.getPosition());
 					if (path != null) {
-						state = State.MOVING_TO_TARGET;
+						changeState(State.MOVING_TO_TARGET);
 						sendMove(time, path);
 						return;
 					}
@@ -176,7 +199,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 				path = search.breadthFirstSearch(currentPosition, next);
 				if (path != null) {
 					sendMove(time, path);
-					state = State.PATROLLING;
+					changeState(State.PATROLLING);
 					return;
 				}
 			}
@@ -184,7 +207,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		path = randomWalk();
 		sendMove(time, path);
-		state = State.RANDOM_WALKING;
+		changeState(State.RANDOM_WALKING);
 		return;
 	}
 
@@ -203,7 +226,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 			return false;
 		}
 
-		logInfo(time, "posicao nao definida");
+		log("Position of the human target not defined. Can't say if it's on board");
 		return false;
 	}
 
@@ -422,9 +445,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		// TODO existe tarefa mais vantajosa?
 	}
 
-	private void logInfo(int time, String s) {
-		System.out.println("AmbT - Time " + time + " - ID " +
-				me().getID() + " - Pos: (" + me().getX() + "," + me().getY() +
-				") - " + s);
+	private void changeState(State state) {
+		this.state = state;
+		log("Changed state to: " + this.state);
 	}
 }
