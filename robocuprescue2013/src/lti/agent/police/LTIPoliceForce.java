@@ -1,5 +1,6 @@
 package lti.agent.police;
 
+import java.awt.geom.Rectangle2D;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -125,43 +126,39 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	 *            The table of adjacency of the graph to be sectorized.
 	 */
 	private Set<Sector> sectorize(int numberOfSectors) {
-		Pair<Pair<Integer, Integer>, Pair<Integer, Integer>> bounds = model
-				.getWorldBounds();
+		Rectangle2D bounds = model.getBounds();
 
 		// Get the two points that define the map as rectangle.
-		int minX = bounds.first().first();
-		int minY = bounds.first().second();
-		int maxX = bounds.second().first();
-		int maxY = bounds.second().second();
-
-		int length = maxX - minX;
-		int height = maxY - minY;
+		int x = (int)bounds.getX();
+		int y = (int)bounds.getY();
+		int w = (int)bounds.getWidth();
+		int h = (int)bounds.getHeight();
 
 		// Get the number of divisions on each dimension.
 		Pair<Integer, Integer> factors = factorization(numberOfSectors);
 
-		int lengthDivisions;
-		int heightDivisions;
+		int widthDiv;
+		int heightDiv;
 
-		if (length < height) {
-			lengthDivisions = factors.first();
-			heightDivisions = factors.second();
+		if (w < h) {
+			widthDiv = Math.min(factors.first(), factors.second());
+			heightDiv = Math.max(factors.first(), factors.second());
 		} else {
-			lengthDivisions = factors.second();
-			heightDivisions = factors.first();
+			widthDiv = Math.max(factors.first(), factors.second());
+			heightDiv = Math.min(factors.first(), factors.second());
 		}
 
 		// Divide the map into sectors
 		Set<Sector> sectors = new TreeSet<Sector>();
 
-		for (int i = 0; i < heightDivisions; i++) {
-			for (int j = 0; j < lengthDivisions; j++) {
+		for (int i = 0; i < heightDiv; i++) {
+			for (int j = 0; j < widthDiv; j++) {
 				sectors.add(new Sector(
-						minX + (length * j) / lengthDivisions,
-						minY + (height * i) / heightDivisions,
-						minX + (length * (j + 1)) / lengthDivisions,
-						minY + (height * (i + 1)) / heightDivisions,
-						lengthDivisions * i + j + 1)
+						x + j * (w / widthDiv),
+						y + i * (h / heightDiv),
+						w / widthDiv,
+						h / heightDiv,
+						widthDiv * i + j + 1)
 				);
 			}
 		}
@@ -282,10 +279,10 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		 * the sector
 		 */
 		Collection<StandardEntity> entities = model.getObjectsInRectangle(
-			sector.getBounds().first().first(),
-			sector.getBounds().first().second(),
-			sector.getBounds().second().first(),
-			sector.getBounds().second().second()
+			(int)sector.getBounds().getMinX(),
+			(int)sector.getBounds().getMinY(),
+			(int)sector.getBounds().getMaxX(),
+			(int)sector.getBounds().getMaxY()
 		);
 
 		Set<EntityID> locations = new HashSet<EntityID>();
@@ -296,8 +293,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		 */
 		for (StandardEntity next : entities) {
 			if (next instanceof Area) {
-				// Redundante com getObjectsInRectangle?
-				if (sector.geographicallyContains((Area) next)) {
+				if (sector.containsCenter((Area) next)) {
 					locations.add(next.getID());
 				}
 			}
@@ -410,13 +406,10 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			for (Sector next : sectors) {
 				out.write("Sector " + next.getIndex());
 				out.newLine();
-				Pair<Pair<Integer, Integer>, Pair<Integer, Integer>> bounds = next
-						.getBounds();
-				out.write("Bottom-left: " + bounds.first().first() + ", "
-						+ bounds.first().second());
+				Rectangle2D bounds = next.getBounds2D();
+				out.write("Bottom-left: " + bounds.getX() + ", " + bounds.getY());
 				out.newLine();
-				out.write("Top-right: " + bounds.second().first() + ", "
-						+ bounds.second().second());
+				out.write("Width x Height: " + bounds.getWidth() + " x " + bounds.getHeight());
 				out.newLine();
 				if (next.getLocations() != null) {
 					out.write("Number of entities: "
