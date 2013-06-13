@@ -33,8 +33,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private List<EntityID> fireBrigadesList;
 
 	private static enum State {
-		MOVING_TO_REFUGE, MOVING_TO_FIRE, EXTINGUISHING_FIRE, REFILLING,
-		RANDOM_WALKING, TAKING_ALTERNATE_ROUTE, DEAD, BURIED
+		MOVING_TO_REFUGE, MOVING_TO_FIRE, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
+		EXTINGUISHING_FIRE, REFILLING, DEAD, BURIED
 	};
 
 	private State state;
@@ -215,13 +215,10 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 	@Override
 	protected boolean amIBlocked(int time) {
-		if (lastPosition.getValue() == currentPosition.getValue()
-				&& (state.equals(State.MOVING_TO_FIRE) || state
-						.equals(State.MOVING_TO_REFUGE))
-				&& getBlockedRoads().contains(location().getID())) {
-			return true;
-		}
-		return false;
+		return lastPosition.getValue() == currentPosition.getValue()
+					&& isMovingState()
+					&& time > 3
+					&& getBlockedRoads().contains(location().getID());
 	}
 
 	@Override
@@ -281,6 +278,16 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			target = null;
 		}
 
+	}
+
+	private boolean isMovingState() {
+		List<State> ss = new ArrayList<State>();
+		ss.add(State.MOVING_TO_FIRE);
+		ss.add(State.MOVING_TO_REFUGE);
+		ss.add(State.RANDOM_WALKING);
+		ss.add(State.TAKING_ALTERNATE_ROUTE);
+
+		return ss.contains(state);
 	}
 	
 	private void changeState(State state) {

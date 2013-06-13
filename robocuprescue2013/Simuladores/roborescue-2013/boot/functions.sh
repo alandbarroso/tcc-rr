@@ -1,6 +1,7 @@
 DIR=`pwd`
 BASEDIR="`cd .. && pwd`"
 PIDS=
+LOG_TEAM=""
 
 # Wait for a regular expression to appear in a file.
 # $1 is the log to check
@@ -84,6 +85,10 @@ function processArgs {
                 TIMESTAMP_LOGS="yes";
                 shift
                 ;;
+            --logteam)
+                LOG_TEAM="yes";
+                shift
+                ;;
             -h | --help)
                 printUsage
                 exit 1;
@@ -153,6 +158,15 @@ function startSims {
     PIDS="$PIDS $!"
     xterm -T clear -e "java -Xmx256m -cp $CP:$BASEDIR/jars/rescuecore2.jar:$BASEDIR/jars/standard.jar:$BASEDIR/jars/clear.jar rescuecore2.LaunchComponents clear.ClearSimulator -c $DIR/config/clear.cfg $* 2>&1 | tee $LOGDIR/clear-out.log" &
     PIDS="$PIDS $!"
+
+    if [ ! -z "$LOG_TEAM" ]; then
+        xterm -geometry 100x17-0+0 -T policeForce -e "tail -F $LOGDIR/console-eclipse-out.log | grep -i policeforce" &
+        PIDS="$PIDS $!"
+        xterm -geometry 100x17-0+280 -T ambulanceTeam -e "tail -F $LOGDIR/console-eclipse-out.log | grep -i ambulanceteam" &
+        PIDS="$PIDS $!"
+        xterm -geometry 100x17-0-0 -T fireBrigade -e "tail -F $LOGDIR/console-eclipse-out.log | grep -i firebrigade" &
+        PIDS="$PIDS $!"
+    fi
 
     # Wait for all simulators to start
     waitFor $LOGDIR/viewer.log "connected"
