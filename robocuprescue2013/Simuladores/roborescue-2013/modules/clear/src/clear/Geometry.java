@@ -20,7 +20,7 @@ public class Geometry {
 			agentToTarget = agentToTarget.normalised().scale(clearLength);
 
 		Vector2D backAgent = (new Vector2D(agent.getX(), agent.getY()))
-				.add(agentToTarget.normalised().scale(-clearRad));
+				.add(agentToTarget.normalised().scale(-510));
 		Line2D line = new Line2D(backAgent.getX(), backAgent.getY(),
 				agentToTarget.getX(), agentToTarget.getY());
 
