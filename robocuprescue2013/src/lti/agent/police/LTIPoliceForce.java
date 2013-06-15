@@ -496,6 +496,17 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		currentX = me().getX();
 		currentY = me().getY();
 
+		// Send a message about all the perceptions
+		Message msg = composeMessage(changed);
+
+		if (this.channelComm) {
+			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
+				for (Pair<Integer, Integer> channel : channelList) {
+					sendSpeak(time, channel.first(), msg.getMessage());
+				}
+			}
+		}
+
 		if (me().getHP() == 0) {
 			changeState(State.DEAD);
 			return;
@@ -530,17 +541,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		// Pick a task to work upon, if you don't have one
 		if (target == null) {
 			target = selectTask();
-		}
-
-		// Send a message about all the perceptions
-		Message msg = composeMessage(changed);
-
-		if (this.channelComm) {
-			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
-				for (Integer channel : channelList) {
-					sendSpeak(time, channel.intValue(), msg.getMessage());
-				}
-			}
 		}
 
 		// Remove the obstructing blockade, if it exists

@@ -25,6 +25,7 @@ import lti.utils.Search;
 
 import rescuecore2.Constants;
 import rescuecore2.messages.Command;
+import rescuecore2.misc.Pair;
 import rescuecore2.misc.geometry.GeometryTools2D;
 import rescuecore2.misc.geometry.Line2D;
 import rescuecore2.misc.geometry.Point2D;
@@ -55,11 +56,13 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	private static final String SPEAK_COMMUNICATION_MODEL = ChannelCommunicationModel.class
 			.getName();
 
-	private static final String CHANNEL_COUNT = "comms.channels.count";
+	private static final String PREFIX_CHANNELS = "comms.channels.";
+	
+	private static final String CHANNEL_COUNT = PREFIX_CHANNELS + "count";
 
-	private static final String MAX_CHANNEL_PLATOON = "comms.channels.max.platoon";
+	private static final String MAX_CHANNEL_PLATOON = PREFIX_CHANNELS + "max.platoon";
 
-	private static final String MAX_CHANNEL_CENTRE = "comms.channels.max.centre";
+	private static final String MAX_CHANNEL_CENTRE = PREFIX_CHANNELS + "max.centre";
 
 	protected Search search;
 
@@ -90,7 +93,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	// Send channel number
 	protected int sendChannel;
 
-	protected List<Integer> channelList;
+	protected List<Pair<Integer, Integer>> channelList;
 
 	protected EntityID lastPosition;
 
@@ -167,7 +170,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		this.receiveChannel = 0;
 		this.sendChannel = 0;
 
-		channelList = new ArrayList<Integer>();
+		channelList = new ArrayList<Pair<Integer, Integer>>();
 
 		maxSight = config.getIntValue(MAX_SIGHT_KEY);
 
@@ -199,12 +202,22 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 
 		// Subscribe to a communication channel
 		if (time == config.getIntValue(kernel.KernelConstants.IGNORE_AGENT_COMMANDS_KEY)) {
-			if (channelComm) {
-				for (int i = 1; i <= numChannels; i++) {
-					channelList.add(new Integer(i));
+			if (channelComm && maxChannelPlatoon >= 1) {
+				int chosenChannel = 0;
+				int maxBandwidth = 0;
+				for (int i = 0; i < numChannels; i++) {
+					if (config.getValue(PREFIX_CHANNELS + i + ".type").equalsIgnoreCase("radio")) {
+						int bandwidth = config.getIntValue(PREFIX_CHANNELS + i + ".bandwidth");
+						channelList.add(new Pair<Integer, Integer>(i, bandwidth));
+						if (bandwidth > maxBandwidth) {
+							maxBandwidth = bandwidth;
+							chosenChannel = i;
+						}
+					}
 				}
-				Collections.shuffle(channelList);
-				sendSubscribe(time, channelList.get(0).intValue());
+				sendSubscribe(time, chosenChannel);
+				log("Subscribed to channel " + chosenChannel +
+						" with bandwidth: " + maxBandwidth + " from options: " + channelList);
 			}
 		}
 
@@ -828,8 +841,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		String[] type_agent = me().getURN().split(":");
 
 		String msg_erro =
-				type_agent[type_agent.length - 1] + internalID + 
-			" - Time: " + currentTime +
+				"Time: " + currentTime +
+			" - " + type_agent[type_agent.length - 1] + internalID + 
 			" - ID: " + me().getID() +
 			" - Pos: (" + currentX + "," + currentY + ")";
 		if (s != "")
