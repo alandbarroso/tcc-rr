@@ -257,7 +257,7 @@ public class CommandLayer extends StandardViewLayer {
 			agentToTarget = agentToTarget.normalised().scale(clearLength);
 
 		Vector2D backAgent = (new Vector2D(agent.getX(), agent.getY()))
-				.add(agentToTarget.normalised().scale(-clearRad));
+				.add(agentToTarget.normalised().scale(-510));
 		Line2D line = new Line2D(backAgent.getX(), backAgent.getY(),
 				agentToTarget.getX(), agentToTarget.getY());
 
@@ -312,7 +312,7 @@ public class CommandLayer extends StandardViewLayer {
         PoliceForce agent = (PoliceForce) world.getEntity(c.getAgentID());
 		int targetX = c.getDestinationX();
 		int targetY = c.getDestinationY();
-		Area area = getClearArea(agent, targetX, targetY, 10000, 2000);
+		Area area = getClearArea(agent, targetX, targetY, 10000, 1250);
         g.setColor(CLEAR_COLOUR);
 		drawArea(area);
 
