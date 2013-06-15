@@ -36,11 +36,13 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 	private static final String DISTANCE_KEY = "clear.repair.distance";
 
-	private int distance;
+	private static final String REPAIR_RATE_KEY = "clear.repair.rate";
+
+	private int minClearDistance;
+
+	private int repairRate;
 
 	private Sector sector;
-
-	// private List<EntityID> placesToCheck;
 
 	private State state;
 
@@ -73,7 +75,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		
 		internalID = policeForcesList.indexOf(me().getID()) + 1;
 		
-		distance = config.getIntValue(DISTANCE_KEY);
+		minClearDistance = config.getIntValue(DISTANCE_KEY);
+		
+		repairRate = config.getIntValue(REPAIR_RATE_KEY);
 
 		changeState(State.RANDOM_WALKING);
 
@@ -89,13 +93,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		sector = defineSector(sectors);
 		log("Defined sector: " + sector);
-
-		/*
-		 * placesToCheck = new
-		 * ArrayList<EntityID>(sector.getLocations().keySet());
-		 */
-		// Collections.shuffle(placesToCheck, new
-		// Random(me().getID().getValue()));
 	}
 
 	/**
@@ -498,7 +495,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		// Send a message about all the perceptions
 		Message msg = composeMessage(changed);
-
 		if (this.channelComm) {
 			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
 				for (Pair<Integer, Integer> channel : channelList) {
@@ -512,44 +508,33 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			return;
 		}
 
-		/*
-		 * if (placesToCheck.isEmpty()) { placesToCheck = new
-		 * ArrayList<EntityID>(sector.getLocations() .keySet());
-		 * Collections.shuffle(placesToCheck, new Random(me().getID()
-		 * .getValue() + time)); }
-		 */
-
 		if (me().getBuriedness() != 0) {
 			changeState(State.BURIED);
 			return;
 		}
 
-		// placesToCheck.remove(currentPosition);
-
-		// Am I stuck?
-		// if (amIBlocked(time) && obstructingBlockade == null) {
-		if (amIBlocked(time) && isMovingState()) {
-			changeState(State.CLEARING_PATH);
-			obstructingBlockade = getClosestBlockade();
-		}
-
 		// Evaluate task dropping
 		if (target != null) {
 			dropTask(time, changed);
+			if (target == null)
+				log("Dropped task: " + taskDropped);
 		}
 
 		// Pick a task to work upon, if you don't have one
 		if (target == null) {
 			target = selectTask();
+			if (target != null)
+				log("Selected task: " + target);
 		}
 
-		// Remove the obstructing blockade, if it exists
-		if (state.equals(State.CLEARING_PATH)) {
-			if (model.getEntitiesOfType(StandardEntityURN.BLOCKADE).contains(
-					model.getEntity(obstructingBlockade))
-					&& model.getDistance(me().getID(), obstructingBlockade) < distance) {
+		if (amIBlocked(time)) {
+			changeState(State.CLEARING_PATH);
+			obstructingBlockade = getClosestBlockade();
+			if (obstructingBlockade != null) {
 				sendClear(time, obstructingBlockade);
-				log("Sent clear to remove the obstructing blockade: " + obstructingBlockade);
+				int repairCost = ((Blockade)model.getEntity(obstructingBlockade)).getRepairCost();
+				log("Sent clear to remove " + repairRate + "/" + repairCost +
+						" of the obstructing blockade: " + obstructingBlockade);
 				return;
 			}
 		}
@@ -560,7 +545,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			if (blockadeInRange(target, changed)) {
 				changeState(State.CLEARING);
 				sendClear(time, target);
-				log("Sent clear to remove the target: " + target);
+				int repairCost = ((Blockade)model.getEntity(target)).getRepairCost();
+				log("Sent clear to remove " + repairRate + "/" + repairCost + " of the target: " + target);
 				return;
 			}
 
@@ -607,7 +593,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		if (path != null) {
 			sendMove(time, path);
-			log("Path calculated and sent move");
+			log("Path calculated and sent move: " + path);
 			return;
 		}
 	}
@@ -632,8 +618,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				}
 			}
 
-			Collections.shuffle(possible, new Random(me().getID().getValue()
-					+ time));
+			Collections.shuffle(possible, new Random(me().getID().getValue() + time));
 			boolean found = false;
 
 			for (EntityID next : possible) {
@@ -662,7 +647,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private boolean blockadeInRange(EntityID blockade, ChangeSet changed) {
 		if (getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE, changed)
 				.contains(blockade)
-				&& model.getDistance(me().getID(), blockade) < distance) {
+				&& model.getDistance(me().getID(), blockade) < minClearDistance) {
 			return true;
 		}
 
@@ -741,13 +726,13 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			 * burningBuildingsAround++; } } } } } }
 			 * 
 			 * if (civiliansInSector.isEmpty() && burningBuildings.isEmpty()) {
-			 * newPb = 1 / Math.sqrt(distance / 1000) + 1 / repairCost; } else
+			 * newPb = 1 / Math.sqrt(minClearDistance / 1000) + 1 / repairCost; } else
 			 * if (!civiliansInSector.isEmpty()) { newPb = 1 /
-			 * Math.sqrt(distance / 1000) + 1 / repairCost + civiliansAround /
+			 * Math.sqrt(minClearDistance / 1000) + 1 / repairCost + civiliansAround /
 			 * civiliansInSector.size(); } else if (!burningBuildings.isEmpty())
-			 * { newPb = 1 / Math.sqrt(distance / 1000) + 1 / repairCost +
+			 * { newPb = 1 / Math.sqrt(minClearDistance / 1000) + 1 / repairCost +
 			 * burningBuildingsAround / burningBuildings.size(); } else { newPb
-			 * = 1 / Math.sqrt(distance / 1000) + 1 / repairCost +
+			 * = 1 / Math.sqrt(minClearDistance / 1000) + 1 / repairCost +
 			 * civiliansAround / civiliansInSector.size() +
 			 * burningBuildingsAround / burningBuildings.size(); }
 			 */
