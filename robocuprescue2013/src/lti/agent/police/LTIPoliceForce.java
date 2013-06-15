@@ -531,7 +531,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			changeState(State.CLEARING_PATH);
 			obstructingBlockade = getBestClosestBlockadeToClear();
 			if (obstructingBlockade != null) {
-				sendClear(time, obstructingBlockade);
+				sendClearArea(time, obstructingBlockade);
 				int repairCost = ((Blockade)model.getEntity(obstructingBlockade)).getRepairCost();
 				log("Sent clear to remove " + repairRate + "/" + repairCost +
 						" of the obstructing blockade: " + obstructingBlockade);
@@ -544,7 +544,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			// Is the target visible and inside clearing range?
 			if (blockadeInRange(target, changed)) {
 				changeState(State.CLEARING);
-				sendClear(time, target);
+				sendClearArea(time, target);
 				int repairCost = ((Blockade)model.getEntity(target)).getRepairCost();
 				log("Sent clear to remove " + repairRate + "/" + repairCost + " of the target: " + target);
 				return;
@@ -645,13 +645,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	 *         otherwise.
 	 */
 	private boolean blockadeInRange(EntityID blockade, ChangeSet changed) {
-		if (getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE, changed)
+		return getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE, changed)
 				.contains(blockade)
-				&& model.getDistance(me().getID(), blockade) < minClearDistance) {
-			return true;
-		}
-
-		return false;
+				&& model.getDistance(me().getID(), blockade) < 3.0*minClearDistance/4;
 	}
 	
 	/**
@@ -694,6 +690,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			Blockade blockade = (Blockade) model.getEntity(next);
 
 			int thisDistance = model.getDistance(getID(), blockade.getID());
+			int repairCost = blockade.getRepairCost();
 			/*
 			 * int repairCost = blockade.getRepairCost();
 			 * 
@@ -737,7 +734,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			 * civiliansAround / civiliansInSector.size() +
 			 * burningBuildingsAround / burningBuildings.size(); }
 			 */
-			double thisPb = 1 / ((double) thisDistance / 1000);
+			double thisPb = repairCost - thisDistance / 500;
 
 			if (thisPb > Pb) {
 				result = next;
@@ -820,6 +817,19 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	@Override
 	protected EnumSet<StandardEntityURN> getRequestedEntityURNsEnum() {
 		return EnumSet.of(StandardEntityURN.POLICE_FORCE);
+	}
+
+	private void sendClearArea(int time, EntityID target) {
+		Blockade block = (Blockade)model.getEntity(target);
+		
+		long moduloVetorDirecao = minClearDistance;
+		long deltaX = block.getX() - currentX, deltaY = block.getY() - currentY;
+		double deltaDirecao = Math.sqrt(deltaX*deltaX + deltaY*deltaY);
+		double alpha = moduloVetorDirecao/deltaDirecao;
+		int xDestino = currentX + (int)(alpha*deltaX);
+		int yDestino = currentY + (int)(alpha*deltaY);
+		
+		sendClear(time, xDestino, yDestino);
 	}
 
 	private boolean isMovingState() {
