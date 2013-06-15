@@ -529,7 +529,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		if (amIBlocked(time)) {
 			changeState(State.CLEARING_PATH);
-			obstructingBlockade = getClosestBlockade();
+			obstructingBlockade = getBestClosestBlockadeToClear();
 			if (obstructingBlockade != null) {
 				sendClear(time, obstructingBlockade);
 				int repairCost = ((Blockade)model.getEntity(obstructingBlockade)).getRepairCost();
@@ -659,18 +659,19 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	 * 
 	 * @return The closest blockade.
 	 */
-	private EntityID getClosestBlockade() {
-		int dist = Integer.MAX_VALUE;
+	private EntityID getBestClosestBlockadeToClear() {
+		int maxRepairCost = 0, dist, repairCost;
 		EntityID result = null;
 		Set<StandardEntity> blockades = new HashSet<StandardEntity>(
 				model.getEntitiesOfType(StandardEntityURN.BLOCKADE));
 
 		for (StandardEntity next : blockades) {
-			int newDist = model.getDistance(getID(), next.getID());
+			dist = model.getDistance(getID(), next.getID());
+			repairCost = ((Blockade)next).getRepairCost();
 
-			if (newDist < dist) {
+			if (dist <= minClearDistance && repairCost >= maxRepairCost) {
 				result = next.getID();
-				dist = newDist;
+				maxRepairCost = repairCost;
 			}
 		}
 
