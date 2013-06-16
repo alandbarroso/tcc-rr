@@ -20,6 +20,7 @@ import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
 import lti.utils.EntityIDComparator;
 import rescuecore2.messages.Command;
+import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.Civilian;
@@ -133,8 +134,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		if (this.channelComm) {
 			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
-				for (Integer channel : channelList) {
-					sendSpeak(time, channel.intValue(), msg.getMessage());
+				for (Pair<Integer,Integer> channel : channelList) {
+					sendSpeak(time, channel.first(), msg.getMessage());
 				}
 			}
 		}
