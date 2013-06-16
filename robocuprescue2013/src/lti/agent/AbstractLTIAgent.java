@@ -49,7 +49,7 @@ import rescuecore2.worldmodel.EntityID;
 public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		StandardAgent<E> {
 
-	protected static final int RANDOM_WALK_LENGTH = 50;
+	protected static final int RANDOM_WALK_LENGTH = 5;
 
 	private static final String MAX_SIGHT_KEY = "perception.los.max-distance";
 
@@ -286,7 +286,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		Set<EntityID> result = new HashSet<EntityID>();
 
 		for (EntityID next : visibleEntities) {
-			if (model.getEntity(next).getStandardURN().equals(type)) {
+			if (model.getEntity(next) != null &&
+					model.getEntity(next).getStandardURN().equals(type)) {
 				result.add(next);
 			}
 		}
@@ -841,10 +842,10 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		String[] type_agent = me().getURN().split(":");
 
 		String msg_erro =
-				"Time: " + currentTime +
-			" - " + type_agent[type_agent.length - 1] + internalID + 
-			" - ID: " + me().getID() +
-			" - Pos: (" + currentX + "," + currentY + ")";
+				"T" + currentTime +
+			" " + type_agent[type_agent.length - 1] + internalID + 
+			" ID" + me().getID() +
+			" Pos:(" + currentX + "," + currentY + ")@" + currentPosition;
 		if (s != "")
 			msg_erro += " - " + s;
 		System.out.println(msg_erro);
