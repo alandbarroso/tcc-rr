@@ -62,7 +62,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	
 	private Set<EntityID> buildingEntrancesToBeCleared;
 	
-	private boolean clearEntranceResponsible;
+	private boolean clearEntranceTask;
 	
 	private EntityID buildingEntranceTarget;
 	
@@ -77,9 +77,44 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	@Override
 	protected void postConnect() {
 		super.postConnect();
+		
+		inicializaVariaveis();
+
+		changeState(State.RANDOM_WALKING);
+		
+		defineSectorRelatedVariables();
+		
+		buildingEntrancesToBeCleared = getBuildingEntrancesToBeCleared(this.sector);
+	}
+
+	/**
+	 * Define the number of divisions, sectorize the world, print the sectors into a
+	 * file, define the working sector of this instance of the agent and keep the list
+	 * of the sectors that can be used during the simulation as a working sector
+	 */
+	private void defineSectorRelatedVariables() {
+		numberOfDivisions = defineNumberOfDivisions();
+
+		Set<Sector> sectors = sectorize(numberOfDivisions);
+
+		//TODO: Remove for competition
+		printSectorsToFile(sectors);
+
+		sector = defineSector(sectors);
+
+		sectorsLeftToSearch = new ArrayList<Sector>(sectors);
+		sectorsLeftToSearch.remove(sector);
+		
+		log("Defined sector: " + sector);
+	}
+
+	/**
+	 * Inicializa as variáveis utilizadas pelo agente
+	 */
+	private void inicializaVariaveis() {
 		currentX = me().getX();
 		currentY = me().getY();
-		clearEntranceResponsible = false;
+		clearEntranceTask = false;
 		buildingEntranceTarget = null;
 		path = null;
 		lastRepairCost = -1;
@@ -99,34 +134,15 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		minClearDistance = config.getIntValue(DISTANCE_KEY);
 		
 		repairRate = config.getIntValue(REPAIR_RATE_KEY);
-
-		changeState(State.RANDOM_WALKING);
-
+		
 		obstructingBlockade = null;
-		
-		numberOfDivisions = defineNumberOfDivisions();
-
-		Set<Sector> sectors = sectorize(numberOfDivisions);
-
-		printSectors(sectors);
-
-		createDotFile(sectors, "setor");
-
-		sector = defineSector(sectors);
-
-		sectorsLeftToSearch = new ArrayList<Sector>(sectors);
-		sectorsLeftToSearch.remove(sector);
-		
-		log("Defined sector: " + sector);
-		
-		buildingEntrancesToBeCleared = getBuildingEntrancesToBeCleared();
 	}
 
-	private Set<EntityID> getBuildingEntrancesToBeCleared() {
+	private Set<EntityID> getBuildingEntrancesToBeCleared(Sector s) {
 		Set<EntityID> buildingEntrances = new HashSet<EntityID>();
-		if (clearEntranceResponsible) {
+		if (clearEntranceTask) {
 			for (EntityID buildingID : buildingIDs) {
-				if (sector.getLocations().keySet().contains(buildingID)) {
+				if (s.getLocations().keySet().contains(buildingID)) {
 					Building building = (Building)model.getEntity(buildingID);
 					if (building != null)
 						for	(EntityID neighbourID : building.getNeighbours())
@@ -140,7 +156,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		
 		return buildingEntrances;
 	}
-	
 
 	/**
 	 * Try to define the number of divisions which can maximize
@@ -428,7 +443,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		return allocated;
 	}
 	
-	private void printSectors(Set<Sector> sectors) {
+	private void printSectorsToFile(Set<Sector> sectors) {
 		try {
 			BufferedWriter out = new BufferedWriter(new FileWriter(
 					"setores.txt"));
@@ -475,6 +490,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				}
 			}
 			out.close();
+			
+			createDotFile(sectors, "setor");
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -519,7 +536,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		
 		
 		if (mypos <= sectorsList.size()) {
-			clearEntranceResponsible = true;
+			clearEntranceTask = true;
 			return sectorsList.get(mypos-1);
 		}
 		
@@ -539,9 +556,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	@Override
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
-		currentX = me().getX();
-		currentY = me().getY();
-		lastTarget = target;
+		
+		recalculaVariaveisCiclo();
 
 		if (me().getHP() == 0) {
 			changeState(State.DEAD);
@@ -553,59 +569,19 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			return;
 		}
 		
-		if (currentPosition.equals(buildingEntranceTarget))
-			buildingEntranceTarget = null;
-		if (buildingEntrancesToBeCleared.contains(currentPosition)) {
-			buildingEntrancesToBeCleared.remove(currentPosition);
-			if (buildingEntrancesToBeCleared.size() == 0) {
-				if (sectorsLeftToSearch.size() > 0) {
-					Collections.shuffle(sectorsLeftToSearch);
-					sector = sectorsLeftToSearch.get(0);
-					sectorsLeftToSearch.remove(sector);
-					buildingEntrancesToBeCleared = getBuildingEntrancesToBeCleared();
-				} else {
-					clearEntranceResponsible = false;
-				}
-			}
-			
-			log("Just cleared one more entrance. Yet " +
-					buildingEntrancesToBeCleared.size() + " building entrances to come");
-		}
+		verifyBuildingEntrancesToBeCleared();
 
-		// Evaluate task dropping
-		if (target != null) {
-			dropTask(time, changed);
-			if (target == null)
-				log("Dropped task: " + taskDropped);
-		}
-
-		// Pick a task to work upon, if you don't have one
-		if (target == null) {
-			target = selectTask();
-			if (target != null)
-				log("Selected task: " + target);
-		}
+		evaluateTaskDroppingAndSelection(changed);
 		
-		// Send a message about all the perceptions
-		Message msg = composeMessage(changed);
-		if (this.channelComm) {
-			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
-				for (Pair<Integer, Integer> channel : channelList) {
-					sendSpeak(time, channel.first(), msg.getMessage());
-				}
-			}
-		}
+		sendMessageAboutPerceptions(changed);
 
-		// If I'm blocked it can be because there's a blockade or because my path can't be achieved.
+		/**
+		 * If I'm blocked it's probably because there's an obstructing blockade
+		 */
 		if (amIBlocked(time)) {
 			obstructingBlockade = getBestClosestBlockadeToClear();
 			if (obstructingBlockade != null) {
-				changeState(State.CLEARING_PATH);
-				sendClearArea(time, obstructingBlockade);
-				int repairCost = ((Blockade)model.getEntity(obstructingBlockade)).getRepairCost();
-				lastRepairCost = repairCost;
-				log("Sent clear to remove " + repairRate + "/" + repairCost +
-						" of the obstructing blockade: " + obstructingBlockade);
+				clearObstructingBlockade();
 				return;
 			}
 		}
@@ -614,34 +590,16 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		if (target != null) {
 			// Is the target visible and inside clearing range?
 			if (blockadeInRange(target, changed)) {
-				changeState(State.CLEARING);
-				sendClearArea(time, target);
-				
-				int repairCost = ((Blockade)model.getEntity(target)).getRepairCost();
-				lastRepairCost = repairCost;
-				log("Sent clear to remove " + repairRate + "/" + repairCost + " of the target: " + target);
+				clearBlockade();
 				return;
 			}
 
 			log("Target " + target + " out of direct reach");
-
 			Blockade targetBlockade = (Blockade) model.getEntity(target);
 
-			if (sector.getLocations().keySet().contains(currentPosition)) {
-				path = search.breadthFirstSearch(currentPosition, sector,
-						targetBlockade.getPosition());
-				log("I'm inside my sector");
-			} else {
-				path = search.breadthFirstSearch(currentPosition,
-						targetBlockade.getPosition());
-				log("I'm outside my sector");
-			}
-
+			path = getPathToTarget(targetBlockade);
 			if (path != null) {
-				changeState(State.MOVING_TO_BLOCKADE);
-				sendMove(time, path, targetBlockade.getX(),
-						targetBlockade.getY());
-				log("Found path: " + path + " and sent move to target: " + target);
+				moveToBlockade(targetBlockade);
 				return;
 			}
 
@@ -650,15 +608,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		// Move around the map
 		
-		if (clearEntranceResponsible) {
-			if (buildingEntranceTarget == null) {
-				log(buildingEntrancesToBeCleared.toString());
-				path = search.breadthFirstSearch(currentPosition, buildingEntrancesToBeCleared);
-				buildingEntranceTarget = path.get(path.size()-1);
-			} else {
-				path = search.breadthFirstSearch(currentPosition, buildingEntranceTarget);
-			}
-			changeState(State.MOVING_TO_ENTRANCE_BUILDING);
+		if (clearEntranceTask) {
+			path = getPathToEntranceTarget();
 		} else {
 			if (sector.getLocations().keySet().contains(currentPosition)) {
 				path = randomWalk(time);
@@ -676,6 +627,141 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			log("Path calculated and sent move: " + path);
 			return;
 		}
+	}
+
+	private List<EntityID> getPathToEntranceTarget() {
+		List<EntityID> path;
+		
+		if (buildingEntranceTarget == null) {
+			path = search.breadthFirstSearch(currentPosition, buildingEntrancesToBeCleared);
+			buildingEntranceTarget = path.get(path.size()-1);
+		} else {
+			path = search.breadthFirstSearch(currentPosition, buildingEntranceTarget);
+		}
+		changeState(State.MOVING_TO_ENTRANCE_BUILDING);
+		return path;
+	}
+
+	/**
+	 * @param time
+	 * @param targetBlockade
+	 */
+	private void moveToBlockade(Blockade targetBlockade) {
+		changeState(State.MOVING_TO_BLOCKADE);
+		sendMove(currentTime, path, targetBlockade.getX(),
+				targetBlockade.getY());
+		log("Found path: " + path + " and sent move to target: " + target);
+	}
+
+	/**
+	 * @param targetBlockade
+	 */
+	private List<EntityID> getPathToTarget(Blockade targetBlockade) {
+		List<EntityID> path;
+		
+		if (sector.getLocations().keySet().contains(currentPosition)) {
+			path = search.breadthFirstSearch(currentPosition, sector,
+					targetBlockade.getPosition());
+			log("I'm inside my sector");
+		} else {
+			path = search.breadthFirstSearch(currentPosition,
+					targetBlockade.getPosition());
+			log("I'm outside my sector");
+		}
+		return path;
+	}
+
+	/**
+	 * @param time
+	 */
+	private void clearBlockade() {
+		changeState(State.CLEARING);
+		sendClearArea(currentTime, target);
+		
+		int repairCost = ((Blockade)model.getEntity(target)).getRepairCost();
+		lastRepairCost = repairCost;
+		log("Sent clear to remove " + repairRate + "/" + repairCost +
+				" of the target: " + target);
+	}
+
+	/**
+	 * If I'm blocked it's probably because there's an obstructing blockade
+	 * @param time
+	 */
+	private void clearObstructingBlockade() {
+		changeState(State.CLEARING_PATH);
+		sendClearArea(currentTime, obstructingBlockade);
+		int repairCost = ((Blockade)model.getEntity(obstructingBlockade)).getRepairCost();
+		lastRepairCost = repairCost;
+		log("Sent clear to remove " + repairRate + "/" + repairCost +
+				" of the obstructing blockade: " + obstructingBlockade);
+	}
+
+	/**
+	 * @param time
+	 * @param changed
+	 */
+	private void sendMessageAboutPerceptions(ChangeSet changed) {
+		// Send a message about all the perceptions
+		Message msg = composeMessage(changed);
+		if (this.channelComm) {
+			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
+				for (Pair<Integer, Integer> channel : channelList) {
+					sendSpeak(currentTime, channel.first(), msg.getMessage());
+				}
+			}
+		}
+	}
+
+	private void evaluateTaskDroppingAndSelection(ChangeSet changed) {
+		// Evaluate task dropping
+		if (target != null) {
+			dropTask(currentTime, changed);
+			if (target == null)
+				log("Dropped task: " + taskDropped);
+		}
+
+		// Pick a task to work upon, if you don't have one
+		if (target == null) {
+			target = selectTask();
+			if (target != null)
+				log("Selected task: " + target);
+		}
+	}
+
+	/**
+	 * Verify if I just visited another building entrance and if I'm done looking for 
+	 * building entrances in this sector, I can help in other sectors. If there are no
+	 * other sectors to visit, I'm done.
+	 */
+	private void verifyBuildingEntrancesToBeCleared() {
+		if (currentPosition.equals(buildingEntranceTarget))
+			buildingEntranceTarget = null;
+		if (buildingEntrancesToBeCleared.contains(currentPosition)) {
+			buildingEntrancesToBeCleared.remove(currentPosition);
+			if (buildingEntrancesToBeCleared.size() == 0) {
+				if (sectorsLeftToSearch.size() > 0) {
+					Collections.shuffle(sectorsLeftToSearch);
+					Sector s = sectorsLeftToSearch.get(0);
+					sectorsLeftToSearch.remove(s);
+					buildingEntrancesToBeCleared = getBuildingEntrancesToBeCleared(s);
+				} else {
+					clearEntranceTask = false;
+				}
+			}
+			
+			log("Just cleared one more entrance. Yet " +
+					buildingEntrancesToBeCleared.size() + " building entrances to come");
+		}
+	}
+
+	/**
+	 * 
+	 */
+	private void recalculaVariaveisCiclo() {
+		currentX = me().getX();
+		currentY = me().getY();
+		lastTarget = target;
 	}
 
 	private List<EntityID> randomWalk(int time) {
