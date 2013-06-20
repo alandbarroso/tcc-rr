@@ -15,6 +15,7 @@ import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.FireBrigade;
+import rescuecore2.standard.entities.GasStation;
 import rescuecore2.standard.entities.Hydrant;
 import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.StandardEntity;
@@ -35,7 +36,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private List<EntityID> fireBrigadesList;
 
 	private static enum State {
-		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
+		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, MOVING_TO_GAS, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
 		EXTINGUISHING_FIRE, REFILLING, DEAD, BURIED
 	};
 
@@ -97,6 +98,12 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		// Verify if you are blocked
 		if (amIBlocked(time)) {
 			blocked = true;
+			
+			log("Blocked! Random walk to escape");
+			changeState(State.RANDOM_WALKING);
+			List<EntityID> path = randomWalk();
+			sendMove(time, path);
+			return;
 		}
 
 		dropTask(time, changed);
@@ -165,7 +172,11 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			if (path != null) {
 				path.remove(path.size() - 1);
 				sendMove(time, path);
-				changeState(State.MOVING_TO_FIRE);
+				
+				if(model.getEntity(target) instanceof GasStation)
+					changeState(State.MOVING_TO_GAS);
+				else
+					changeState(State.MOVING_TO_FIRE);
 
 				if (!path.isEmpty()) {
 					target = path.get(path.size() - 1);
@@ -294,16 +305,27 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			}
 		}
 	}
-
+	
 	@Override
 	protected EntityID selectTask() {
 		int closest = Integer.MAX_VALUE;
 		EntityID result = null;
-
+		
+		// For all the buildings, we should prioritize gas stations because they can explode
 		for (EntityID task : taskTable.keySet()) {
 			if (model.getDistance(me().getID(), task) < closest) {
-				closest = model.getDistance(me().getID(), task);
-				result = task;
+				// If result defined
+				if(result != null){
+					// If it's not a GasStation, get closest building, else, get closest GasStation
+					if(!(model.getEntity(result) instanceof GasStation) || model.getEntity(task) instanceof GasStation) {
+						closest = model.getDistance(me().getID(), task);
+						result = task;
+					}
+				}
+				else {
+					closest = model.getDistance(me().getID(), task);
+					result = task;
+				}
 			}
 		}
 
