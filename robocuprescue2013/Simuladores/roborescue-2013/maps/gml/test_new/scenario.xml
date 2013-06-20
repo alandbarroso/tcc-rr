@@ -9,7 +9,8 @@
   <rcr:fire rcr:location="948"/>
   <rcr:fire rcr:location="949"/>
   <rcr:fire rcr:location="960"/>
-  <rcr:hydrant rcr:location="974"/>
+  <rcr:hydrant rcr:location="279"/>
+  <rcr:gasstation rcr:location="939"/>
   <rcr:civilian rcr:location="950"/>
   <rcr:civilian rcr:location="298"/>
   <rcr:civilian rcr:location="957"/>
