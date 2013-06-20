@@ -15,6 +15,7 @@ import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.FireBrigade;
+import rescuecore2.standard.entities.Hydrant;
 import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityURN;
@@ -34,7 +35,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private List<EntityID> fireBrigadesList;
 
 	private static enum State {
-		MOVING_TO_REFUGE, MOVING_TO_FIRE, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
+		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
 		EXTINGUISHING_FIRE, REFILLING, DEAD, BURIED
 	};
 
@@ -127,8 +128,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			}
 		}
 
-		// Am I at a refuge?
-		if (location() instanceof Refuge && me().isWaterDefined()
+		// Am I at a refuge or a hydrant?
+		if ((location() instanceof Refuge || location() instanceof Hydrant) && me().isWaterDefined()
 				&& me().getWater() < maxWater) {
 			sendRest(time);
 			changeState(State.REFILLING);
@@ -173,6 +174,44 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 				return;
 			}
 		}
+		
+		// If it has nothing to do and water level is below 80%, start finding a place to refill it
+		if(me().isWaterDefined() && me().getWater() < 0.8*this.maxWater){
+			log("I have nothing to do, i'll reffil, my water level is at " + ((float) me().getWater()/this.maxWater) + "!");
+			
+			// We analyze first if the level is below 50%
+			// If it is, we search for a refuge
+			if(me().getWater() < 0.5*this.maxWater){
+				log("Finding a refuge");
+				List<EntityID> path = search.breadthFirstSearch(location().getID(),
+						refuges);
+				changeState(State.MOVING_TO_REFUGE);
+
+				if (path == null) {
+					path = randomWalk();
+					log("Trying to move to refugee, but couldn't find path");
+					changeState(State.RANDOM_WALKING);
+				}
+				target = path.get(path.size() - 1);
+				sendMove(time, path);
+				return;
+			}
+			else{
+				log("Finding a hydrant");
+				List<EntityID> path = search.breadthFirstSearch(location().getID(),
+						getHydrants());
+				changeState(State.MOVING_TO_HYDRANT);
+
+				if (path == null) {
+					path = randomWalk();
+					log("Trying to move to hydrant, but couldn't find path");
+					changeState(State.RANDOM_WALKING);
+				}
+				target = path.get(path.size() - 1);
+				sendMove(time, path);
+				return;
+			}
+		}
 
 		// FIXME Avaliar a necessidade deste trecho
 		/*
@@ -196,6 +235,20 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		sendMove(time, path);
 		changeState(State.RANDOM_WALKING);
 		return;
+	}
+	
+	protected List<EntityID> getHydrants(){
+		List<EntityID> result = new ArrayList<EntityID>();
+		Collection<StandardEntity> b = model.
+				getEntitiesOfType(StandardEntityURN.HYDRANT); // List of hydrants
+		
+		for(StandardEntity next : b){
+			if(next instanceof Hydrant){
+				result.add(next.getID());;
+			}
+		}
+		
+		return result;
 	}
 
 	protected List<EntityID> getBurning() {
