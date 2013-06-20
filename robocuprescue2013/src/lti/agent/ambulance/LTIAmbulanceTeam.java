@@ -9,8 +9,10 @@ package lti.agent.ambulance;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -22,7 +24,9 @@ import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.Civilian;
+import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.Human;
+import rescuecore2.standard.entities.PoliceForce;
 import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityURN;
@@ -30,6 +34,12 @@ import rescuecore2.worldmodel.ChangeSet;
 import rescuecore2.worldmodel.EntityID;
 
 public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
+	
+	
+	private static int POLICE_FORCE_RESCUE_PRIORITY = 3;
+	private static int FIRE_BRIGADE_RESCUE_PRIORITY = 4;
+	private static int CIVILIAN_RESCUE_PRIORITY = 1;
+	private static int AMBULANCE_TEAM_RESCUE_PRIORITY = 2;
 
 	private List<EntityID> buildingsToCheck;
 
@@ -272,6 +282,10 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 				taskTable.get(victim.getID()).add(me().getID());
 
+				// System.out.println("TASK SELECTED  by " + me().getID() +
+				// " = "
+				// + victim.getFullDescription());
+
 				return victim.getID();
 			}
 		}
@@ -324,17 +338,54 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		return result;
 	}
+
+
+	/**
+	 * Choose the victim with the best chance of being succesfully rescued.
+	 * 
+	 * @param victims
+	 *            A map containing the victims and the ambulances engaged in
+	 *            rescueing each one.
+	 * @return The Human entity to be rescued.
+	 */
+	private Human pickVictim(Map<EntityID, Set<EntityID>> victims) {
+		int finalDistance = Integer.MAX_VALUE;
+		Human result = null;
+
+		for (EntityID next : victims.keySet()) {
+			if (!next.equals(taskDropped)) {
+				Human victim = (Human) model.getEntity(next);
+				int distanceFromAT = model.getDistance(currentPosition,
+						victim.getPosition());
+				int distanceToRefuge = Integer.MAX_VALUE;
+
+				for (EntityID ref : refuges) {
+					int dist = model.getDistance(victim.getPosition(), ref);
+					if (dist < distanceToRefuge) {
+						distanceToRefuge = dist;
+					}
+				}
+
+				if (distanceFromAT + distanceToRefuge < finalDistance) {
+					finalDistance = distanceFromAT + distanceToRefuge;
+					result = victim;
+				}
+			}
+		}
+
+		return result;
+	}
 	
 	
 	//TODO:Update final code
-		private boolean isSavable(Human victim, int totalDistance){
+		private Boolean isSavable(Human victim, int totalDistance){
 			
 			//Calcula quantos ciclos a vitima tem de vida
 			int remainingCycles = 0;
 			if(victim.isDamageDefined() && victim.getDamage()!=0)
 				remainingCycles = victim.getHP()/victim.getDamage();
 			else
-				return true;
+				return Boolean.TRUE;
 			
 			//Calcula quantos ciclos precisa para salvar a vitima
 			//TODO: considerar tempo de rescue e load
@@ -344,9 +395,37 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 				necessaryCycles = totalDistance/maxDistanceTraveledPerCycle;
 			
 			if(necessaryCycles>remainingCycles)
-				return false;
+				return Boolean.FALSE;
 			
-			return true;
+			return Boolean.TRUE;
+		}
+		
+		private double savability(Human victim, int totalDistance){
+			int remainingCycles = 0;
+			double savability = 0;
+			
+			if(victim.isDamageDefined() && victim.isHPDefined() && victim.getDamage()!=0)
+				remainingCycles = victim.getHP()/victim.getDamage();
+			else
+				return -1;
+			
+			//TODO: Get good coeficients
+			savability = (double)remainingCycles + (double)1/totalDistance + (double)getSquadPriority(victim);
+			
+			return savability;
+		}
+		
+		private int getSquadPriority(Human victim){
+			if(victim instanceof Civilian)
+				return CIVILIAN_RESCUE_PRIORITY;
+			else if(victim instanceof AmbulanceTeam)
+				return AMBULANCE_TEAM_RESCUE_PRIORITY;
+			else if(victim instanceof PoliceForce)
+				return POLICE_FORCE_RESCUE_PRIORITY;
+			else if(victim instanceof FireBrigade)
+				return FIRE_BRIGADE_RESCUE_PRIORITY;
+			else 
+				return 0;	
 		}
 
 
