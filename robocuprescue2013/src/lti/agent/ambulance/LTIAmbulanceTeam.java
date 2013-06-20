@@ -24,7 +24,9 @@ import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.Civilian;
+import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.Human;
+import rescuecore2.standard.entities.PoliceForce;
 import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityURN;
@@ -32,10 +34,17 @@ import rescuecore2.worldmodel.ChangeSet;
 import rescuecore2.worldmodel.EntityID;
 
 public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
+	
+	
+	private static int POLICE_FORCE_RESCUE_PRIORITY = 3;
+	private static int FIRE_BRIGADE_RESCUE_PRIORITY = 4;
+	private static int CIVILIAN_RESCUE_PRIORITY = 1;
+	private static int AMBULANCE_TEAM_RESCUE_PRIORITY = 2;
 
 	private List<EntityID> buildingsToCheck;
 
 	private List<EntityID> refuges;
+	
 
 	private static enum State {
 		CARRYING_CIVILIAN, PATROLLING, TAKING_ALTERNATE_ROUTE,
@@ -260,42 +269,75 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	@Override
 	protected EntityID selectTask() {
 		if (!taskTable.isEmpty()) {
-			Map<EntityID, Set<EntityID>> taskTableCopy = new HashMap<EntityID, Set<EntityID>>(
-					taskTable);
-			Map<EntityID, Set<EntityID>> narrowedVictims = new HashMap<EntityID, Set<EntityID>>();
-			StandardEntityURN[] urns = { StandardEntityURN.AMBULANCE_TEAM,
-					StandardEntityURN.FIRE_BRIGADE, StandardEntityURN.CIVILIAN,
-					StandardEntityURN.POLICE_FORCE };
-			Human victim;
 
-			// FIXME Ordenação das vítimas pelo seu URN está causando bizarrices
-			for (int i = 0; i < 4; i++) {
-				taskTableCopy.keySet().removeAll(narrowedVictims.keySet());
-				narrowedVictims.clear();
+			Human victim = pickVictim();
 
-				for (EntityID next : taskTableCopy.keySet()) {
-					if (model.getEntity(next).getStandardURN().equals(urns[i])) {
-						narrowedVictims.put(next, taskTableCopy.get(next));
+			if (victim != null) {
+				for (Set<EntityID> agents : taskTable.values()) {
+					if (agents != null) {
+						agents.remove(me().getID());
 					}
 				}
-				victim = pickVictim(narrowedVictims);
 
-				if (victim != null) {
-					for (Set<EntityID> agents : taskTable.values()) {
-						if (agents != null) {
-							agents.remove(me().getID());
-						}
-					}
+				taskTable.get(victim.getID()).add(me().getID());
 
-					taskTable.get(victim.getID()).add(me().getID());
+				// System.out.println("TASK SELECTED  by " + me().getID() +
+				// " = "
+				// + victim.getFullDescription());
 
-					return victim.getID();
-				}
+				return victim.getID();
 			}
 		}
 
 		return null;
 	}
+	
+	
+	private Human pickVictim() {
+		int finalDistance = Integer.MAX_VALUE;
+		Human result = null;
+
+		for (EntityID next : taskTable.keySet()) {
+			if (!next.equals(taskDropped)) {
+				Human victim = (Human) model.getEntity(next);
+				int distanceFromAT = model.getDistance(currentPosition,
+						victim.getPosition());
+				int distanceToRefuge = Integer.MAX_VALUE;
+
+				for (EntityID ref : refuges) {
+					int dist = model.getDistance(victim.getPosition(), ref);
+					if (dist < distanceToRefuge) {
+						distanceToRefuge = dist;
+					}
+				}
+
+				//TODO:Update final code
+				if (victim.getID() != taskDropped) {
+					if (distanceFromAT + distanceToRefuge < finalDistance) {
+						// Se nao ha nenhuma outra entidade salvando a vitima
+						if (taskTable.keySet().contains(victim.getID())
+								&& taskTable.get(victim.getID()).isEmpty()) {
+							if (isSavable(victim, distanceFromAT
+									+ distanceToRefuge)) {
+								finalDistance = distanceFromAT
+										+ distanceToRefuge;
+								result = victim;
+								System.out.println("Going to save victim "+ victim +" by "+me().getID());
+							} else {
+								System.out.println("Not possible to save victim "+ victim +" by "+me().getID());
+							}
+						} else {
+							System.out.println("Victim already being rescued, picking another one "+ victim +" by "+me().getID());
+						}
+
+					}
+				}
+			}
+		}
+
+		return result;
+	}
+
 
 	/**
 	 * Choose the victim with the best chance of being succesfully rescued.
@@ -332,6 +374,59 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		return result;
 	}
+	
+	
+	//TODO:Update final code
+		private Boolean isSavable(Human victim, int totalDistance){
+			
+			//Calcula quantos ciclos a vitima tem de vida
+			int remainingCycles = 0;
+			if(victim.isDamageDefined() && victim.getDamage()!=0)
+				remainingCycles = victim.getHP()/victim.getDamage();
+			else
+				return Boolean.TRUE;
+			
+			//Calcula quantos ciclos precisa para salvar a vitima
+			//TODO: considerar tempo de rescue e load
+			int necessaryCycles = 0;
+
+			if(maxDistanceTraveledPerCycle!=0)
+				necessaryCycles = totalDistance/maxDistanceTraveledPerCycle;
+			
+			if(necessaryCycles>remainingCycles)
+				return Boolean.FALSE;
+			
+			return Boolean.TRUE;
+		}
+		
+		private double savability(Human victim, int totalDistance){
+			int remainingCycles = 0;
+			double savability = 0;
+			
+			if(victim.isDamageDefined() && victim.isHPDefined() && victim.getDamage()!=0)
+				remainingCycles = victim.getHP()/victim.getDamage();
+			else
+				return -1;
+			
+			//TODO: Get good coeficients
+			savability = (double)remainingCycles + (double)1/totalDistance + (double)getSquadPriority(victim);
+			
+			return savability;
+		}
+		
+		private int getSquadPriority(Human victim){
+			if(victim instanceof Civilian)
+				return CIVILIAN_RESCUE_PRIORITY;
+			else if(victim instanceof AmbulanceTeam)
+				return AMBULANCE_TEAM_RESCUE_PRIORITY;
+			else if(victim instanceof PoliceForce)
+				return POLICE_FORCE_RESCUE_PRIORITY;
+			else if(victim instanceof FireBrigade)
+				return FIRE_BRIGADE_RESCUE_PRIORITY;
+			else 
+				return 0;	
+		}
+
 
 	@Override
 	protected void refreshTaskTable(ChangeSet changed) {
@@ -437,11 +532,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		} else if (amIBlocked(time) && !targetOnBoard(time)) {
 			taskDropped = target;
 			target = null;
-		}
-
-		// TODO tempo limite estourará?
-
-		// TODO existe tarefa mais vantajosa?
+		}		
 	}
 	
 	private boolean isMovingState() {
