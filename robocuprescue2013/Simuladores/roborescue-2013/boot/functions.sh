@@ -1,5 +1,6 @@
 DIR=`pwd`
 BASEDIR="`cd .. && pwd`"
+CONFIGDIR="$DIR/config"
 PIDS=
 
 # Wait for a regular expression to appear in a file.
