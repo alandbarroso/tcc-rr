@@ -14,6 +14,7 @@ import lti.utils.EntityIDComparator;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.Building;
+import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.GasStation;
 import rescuecore2.standard.entities.Hydrant;
@@ -34,9 +35,11 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private int maxPower;
 	private List<EntityID> refuges;
 	private List<EntityID> fireBrigadesList;
+	private List<EntityID> gasStationNeighbours;
 
 	private static enum State {
-		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, MOVING_TO_GAS, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
+		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, 
+		MOVING_TO_GAS, MOVING_CLOSE_TO_GAS, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
 		EXTINGUISHING_FIRE, REFILLING, DEAD, BURIED
 	};
 
@@ -71,7 +74,9 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		for (Refuge r : ref) {
 			refuges.add(r.getID());
 		}
-
+		
+		gasStationNeighbours = calculateGasStationNeighbours();
+		
 		changeState(State.RANDOM_WALKING);
 	}
 
@@ -175,6 +180,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 				
 				if(model.getEntity(target) instanceof GasStation)
 					changeState(State.MOVING_TO_GAS);
+				else if(closeToGas(target))
+					changeState(State.MOVING_CLOSE_TO_GAS);
 				else
 					changeState(State.MOVING_TO_FIRE);
 
@@ -311,21 +318,42 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		int closest = Integer.MAX_VALUE;
 		EntityID result = null;
 		
-		// For all the buildings, we should prioritize gas stations because they can explode
+		// For all the buildings, we should prioritize those close to gas stations because they can explode
 		for (EntityID task : taskTable.keySet()) {
-			if (model.getDistance(me().getID(), task) < closest) {
-				// If result defined
-				if(result != null){
-					// If it's not a GasStation, get closest building, else, get closest GasStation
-					if(!(model.getEntity(result) instanceof GasStation) || model.getEntity(task) instanceof GasStation) {
+			// If result defined
+			if(result != null){
+				if(model.getEntity(task) instanceof GasStation) {
+					if(model.getEntity(result) instanceof GasStation) {
+						if (model.getDistance(me().getID(), task) < closest) {
+							closest = model.getDistance(me().getID(), task);
+							result = task;
+						}
+					} else{
 						closest = model.getDistance(me().getID(), task);
 						result = task;
 					}
 				}
-				else {
-					closest = model.getDistance(me().getID(), task);
-					result = task;
+				else if(closeToGas(task) && !(model.getEntity(result) instanceof GasStation)) {
+					if(closeToGas(result)) {
+						if (model.getDistance(me().getID(), task) < closest) {
+							closest = model.getDistance(me().getID(), task);
+							result = task;
+						}
+					} else{
+						closest = model.getDistance(me().getID(), task);
+						result = task;
+					}
 				}
+				else if(!(model.getEntity(result) instanceof GasStation) && !closeToGas(result)){
+					if (model.getDistance(me().getID(), task) < closest) {
+						closest = model.getDistance(me().getID(), task);
+						result = task;
+					}
+				}
+			}
+			else {
+				closest = model.getDistance(me().getID(), task);
+				result = task;
 			}
 		}
 
@@ -369,5 +397,41 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private void changeState(State state) {
 		this.state = state;
 		log("Changed state to: " + this.state);
+	}
+	
+	// Used to calculate all the buildings near gas stations
+	private List<EntityID> calculateGasStationNeighbours(){
+		List<EntityID> result = new ArrayList<EntityID>();
+		
+		Collection<StandardEntity> gasStations = model.
+				getEntitiesOfType(StandardEntityURN.GAS_STATION); // Getting the list of Gas Stations
+		Collection<StandardEntity> buildings = model.
+				getEntitiesOfType(StandardEntityURN.BUILDING); // Getting the list of buildings
+		for(StandardEntity gs : gasStations){
+			if(gs instanceof GasStation){
+				log("GasStation: " + gs.getID());
+				
+				for(StandardEntity bd : buildings){
+					if(bd instanceof Building){
+						log("Building " + bd.getID() + " distance to gas: " + model.getDistance(gs.getID(), bd.getID()));
+						if(model.getDistance(gs.getID(), bd.getID()) < 25000){
+							log("Close building! Adding " + bd.getID() + " to neighbours!");
+							result.add(bd.getID());
+						}
+					}
+				}
+			}
+		}
+
+		
+		return result;
+	}
+	
+	// Verify if is a building is close to a gas station
+	private boolean closeToGas(EntityID ent){
+		if(gasStationNeighbours.contains(ent))
+			return true;
+		
+		return false;
 	}
 }
