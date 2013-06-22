@@ -135,6 +135,10 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 
 	protected EntityID taskDropped;
 	
+	//Valor de distancia medio observado nos logs com testes 
+	//TODO: Pegar um valor mais condizente, talvez no ambiente do simulador
+	protected int maxDistanceTraveledPerCycle = 500;
+
 	protected Set<EntityID> buildingEntrancesCleared;
 
 	@Override

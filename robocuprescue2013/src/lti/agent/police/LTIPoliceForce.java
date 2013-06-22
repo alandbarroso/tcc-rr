@@ -18,19 +18,25 @@ import java.util.TreeSet;
 
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
+import lti.message.Parameter;
+import lti.message.Parameter.Operation;
+import lti.message.type.TaskPickup;
 import lti.message.type.BuildingEntranceCleared;
 import lti.utils.EntityIDComparator;
 import area.Sector;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
+import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.Blockade;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.Human;
 import rescuecore2.standard.entities.PoliceForce;
+import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.Road;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityURN;
+import rescuecore2.standard.messages.AKSpeak;
 import rescuecore2.worldmodel.ChangeSet;
 import rescuecore2.worldmodel.EntityID;
 
@@ -73,6 +79,16 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private EntityID lastTarget;
 
 	private List<EntityID> path;
+	
+	private boolean enablePreventiveClearing = false;
+	private List<Human> preventiveSavedVictims; 
+	private Human victimForPreventiveClearing;
+	private boolean amIPreventiveClearing = false;
+	private boolean amIGoingToRefuge = false;
+	
+	private List<EntityID> refuges;
+	
+	
 
 	@Override
 	protected void postConnect() {
@@ -85,6 +101,12 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		defineSectorRelatedVariables();
 
 		buildingEntrancesToBeCleared = getBuildingEntrancesToBeCleared(this.sector);
+		
+		refuges = new ArrayList<EntityID>();
+		
+		for(Refuge refuge: getRefuges()){
+			refuges.add(refuge.getID());
+		}
 	}
 
 	/**
@@ -137,6 +159,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		repairRate = config.getIntValue(REPAIR_RATE_KEY);
 
 		obstructingBlockade = null;
+		
+		preventiveSavedVictims = new ArrayList<Human>();
 	}
 
 	private Set<EntityID> getBuildingEntrancesToBeCleared(Sector s) {
@@ -601,6 +625,53 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				return;
 			}
 		}
+		
+		if (enablePreventiveClearing) {
+			if (amIPreventiveClearing && target != null) {
+				
+				victimForPreventiveClearing = (Human) model.getEntity(target);
+				log("Preventive Clearing: Started for " +victimForPreventiveClearing);
+				if (!amIGoingToRefuge) {
+					if (currentPosition.equals(victimForPreventiveClearing
+							.getPosition())) {
+						log("Preventive Clearing: Arrived At Victim by "+ me());						
+						// Go to a refuge
+						List<EntityID> path = search.breadthFirstSearch(
+								currentPosition, refuges);
+						sendMove(time, path);
+						amIGoingToRefuge = true;
+						return;
+
+					} else {
+						List<EntityID> path = search.breadthFirstSearch(
+								currentPosition,
+								victimForPreventiveClearing.getPosition());
+						log("Preventive Clearing: Going to Victim");						
+						sendMove(time, path);
+						return;
+					}
+				} else {
+					if (!refuges.contains(currentPosition)) {
+						List<EntityID> path = search.breadthFirstSearch(
+								currentPosition, refuges);
+						sendMove(time, path);
+						log("Preventive Clearing: Going to refuge");						
+						return;
+					} else {
+
+						log("Preventive Clearing: Finished for " + victimForPreventiveClearing);
+						if (!preventiveSavedVictims
+								.contains(victimForPreventiveClearing))
+							preventiveSavedVictims.add(victimForPreventiveClearing);						
+						amIGoingToRefuge = false;
+						target = null;
+						amIPreventiveClearing = false;
+					}
+				}
+
+			}
+		}
+		
 
 		// Work on the task, if you have one
 		if (target != null) {
@@ -893,45 +964,74 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	protected EntityID selectTask() {
 		EntityID result = null;
 		double Pb = Double.NEGATIVE_INFINITY;
+
 		double thisDistance, repairCost, importance;
 		boolean samePosition, isPositionEntrance, isInSector;
 
 		log("taskTable: " + taskTable);
 		for (EntityID next : taskTable.keySet()) {
-			if (!(model.getEntity(next) instanceof Blockade))
-				continue;
-			Blockade blockade = (Blockade) model.getEntity(next);
-
-			thisDistance = model.getDistance(getID(), blockade.getID());
-			repairCost = blockade.getRepairCost();
-
-			EntityID pos = blockade.getPosition();
-			samePosition = (pos == currentPosition);
-			isPositionEntrance = false;
-			if (model.getEntity(pos) instanceof Road) {
-				Road areaEntity = (Road) model.getEntity(pos);
-				for (EntityID e : areaEntity.getNeighbours())
-					if (model.getEntity(e) instanceof Building) {
-						isPositionEntrance = true;
-						break;
+			
+			StandardEntity taskEntity = model.getEntity(next);
+			
+			//Se a tarefa for do tipo human, eh uma vitima para desbloqueio preventivo
+			if(taskEntity instanceof Human) {
+				if (enablePreventiveClearing) {
+					
+					Human humanEntity = (Human) taskEntity;
+					
+					//se o desbloqueio preventivo ainda nao foi feito para essa vitima
+					if (!preventiveSavedVictims.contains(humanEntity)) {
+						//se avitima encontra-se no meu setor
+						if (sector.getLocations().keySet()
+								.contains(humanEntity.getPosition())) {
+							if (!humanEntity.getID().equals(me().getID())
+									&& humanEntity.isBuriednessDefined()
+									&& humanEntity.getBuriedness() > 0) {								
+								result = next;
+								amIPreventiveClearing = true;
+								log("Selected task preventive clearing for "+humanEntity +" by "+me());
+								
+								//Escolheu a vitima para desbloqueio preventivo, sai do loop
+								break;
+							}
+						}
 					}
-			}
-			
-			isInSector = sector.getLocations().keySet().contains(pos);
-			
-			importance = repairCost;
-			importance -= thisDistance / 500;
-			importance += isPositionEntrance ? 4 * repairRate : 0;
-			importance += samePosition ? repairRate : 0;
-			importance += samePosition && isPositionEntrance ? 10 * repairRate : 0;
-			importance += isInSector ? repairRate / 2 : 0;
+				}
+			}			
+			else if(taskEntity instanceof Blockade) {
+				Blockade blockade = (Blockade) taskEntity;
 
-			if (importance > Pb) {
-				result = next;
-				Pb = importance;
+				thisDistance = model.getDistance(getID(), blockade.getID());
+				repairCost = blockade.getRepairCost();
+	
+				EntityID pos = blockade.getPosition();
+				samePosition = (pos == currentPosition);
+				isPositionEntrance = false;
+				if (model.getEntity(pos) instanceof Road) {
+					Road areaEntity = (Road) model.getEntity(pos);
+					for (EntityID e : areaEntity.getNeighbours())
+						if (model.getEntity(e) instanceof Building) {
+							isPositionEntrance = true;
+							break;
+						}
+				}
+				
+				isInSector = sector.getLocations().keySet().contains(pos);
+				
+				importance = repairCost;
+				importance -= thisDistance / 500;
+				importance += isPositionEntrance ? 4 * repairRate : 0;
+				importance += samePosition ? repairRate : 0;
+				importance += samePosition && isPositionEntrance ? 10 * repairRate : 0;
+				importance += isInSector ? repairRate / 2 : 0;
+	
+				if (importance > Pb) {
+					result = next;
+					Pb = importance;
+				}
 			}
 		}
-
+		
 		if (result != null) {
 			for (Set<EntityID> agents : taskTable.values())
 				if (agents != null)
@@ -958,6 +1058,30 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			model.removeEntity(obstructingBlockade);
 			obstructingBlockade = null;
 		}
+		
+		if (enablePreventiveClearing) {
+			// Se algum ambulanceTeam assumir a tarefa de resgatar um ferido
+			// Adicione a tarefa de realizar o desbloqueio preventivo no task table.
+			for (Command cmd : heard) {
+				if (cmd instanceof AKSpeak) {
+					Message speakMsg = new Message(((AKSpeak) cmd).getContent());
+					for (Parameter param : speakMsg.getParameters()) {
+						if (param.getOperation().equals(Operation.TASK_PICKUP)
+								&& param instanceof TaskPickup) {
+							if (model.getEntity(cmd.getAgentID()) instanceof AmbulanceTeam) {
+								TaskPickup task = (TaskPickup) param;
+								EntityID taskID = new EntityID(task.getTask());
+								StandardEntity taskEntity = model
+										.getEntity(taskID);
+								if (taskEntity != null && !taskTable.keySet().contains(taskID)) {
+									taskTable.put(taskID,new HashSet<EntityID>());
+								}
+							}
+						}						
+					}
+				}
+			}
+		}
 
 		super.refreshWorldModel(changed, heard);
 	}
@@ -966,13 +1090,25 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	protected void refreshTaskTable(ChangeSet changed) {
 		Set<StandardEntity> blockades = new HashSet<StandardEntity>(
 				model.getEntitiesOfType(StandardEntityURN.BLOCKADE));
-		Set<EntityID> blockadesIDs = new HashSet<EntityID>();
+		Set<EntityID> remainingIDs = new HashSet<EntityID>();
 
 		for (StandardEntity next : blockades)
-			blockadesIDs.add(next.getID());
+			remainingIDs.add(next.getID());
+		
+		if (enablePreventiveClearing) {
+			Set<StandardEntity> humans = new HashSet<StandardEntity>();
+			humans.addAll(model.getEntitiesOfType(StandardEntityURN.CIVILIAN,
+					StandardEntityURN.AMBULANCE_TEAM,
+					StandardEntityURN.POLICE_FORCE,
+					StandardEntityURN.FIRE_BRIGADE));
+
+			for (StandardEntity next : humans) {
+				remainingIDs.add(next.getID());
+			}
+		}
 
 		// Discard blockades that do not exist anymore
-		taskTable.keySet().retainAll(blockadesIDs);
+		taskTable.keySet().retainAll(remainingIDs);
 
 		// Add new blockades to the task table
 		for (StandardEntity blockade : blockades) {
@@ -981,6 +1117,16 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 			if (!taskTable.containsKey(blockID))
 				taskTable.put(blockID, new HashSet<EntityID>());
+		}
+		
+		
+		if (enablePreventiveClearing) {
+			// Descarta as vitimas para quem ja foi feito o desbloqueio preventivo
+			for (Human preventedVictim : preventiveSavedVictims) {
+				if (taskTable.keySet().contains(preventedVictim.getID())) {
+					taskTable.keySet().remove(preventedVictim.getID());					
+				}
+			}
 		}
 	}
 
@@ -1024,7 +1170,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		ss.add(State.RANDOM_WALKING);
 		ss.add(State.MOVING_TO_UNBLOCK);
 
-		return ss.contains(state);
+		return ss.contains(state) || amIPreventiveClearing;
 	}
 
 	private void changeState(State state) {
