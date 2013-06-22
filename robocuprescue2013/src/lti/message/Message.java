@@ -7,6 +7,7 @@ import lti.message.Parameter.Operation;
 import lti.message.type.Blockade;
 import lti.message.type.BlockadeCleared;
 import lti.message.type.BuildingBurnt;
+import lti.message.type.BuildingEntranceCleared;
 import lti.message.type.Fire;
 import lti.message.type.FireExtinguished;
 import lti.message.type.Help;
@@ -102,6 +103,8 @@ public class Message {
 				this.params.add(new FireExtinguished(tmp));
 			} else if (operation.equals(Operation.BUILDING_BURNT)) {
 				this.params.add(new BuildingBurnt(tmp));
+			} else if (operation.equals(Operation.BUILDING_ENTRANCE_CLEARED)) {
+				this.params.add(new BuildingEntranceCleared(tmp));
 			}
 
 			i += size;
