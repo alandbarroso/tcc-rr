@@ -114,7 +114,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private void inicializaVariaveis() {
 		currentX = me().getX();
 		currentY = me().getY();
-		clearEntranceTask = false;
+		clearEntranceTask = true;
 		buildingEntranceTarget = null;
 		path = null;
 		lastRepairCost = -1;
@@ -535,10 +535,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			nEntitiesTotal += next.getLocations().keySet().size();
 		
 		
-		if (mypos <= sectorsList.size()) {
-			clearEntranceTask = true;
+		if (mypos <= sectorsList.size())
 			return sectorsList.get(mypos-1);
-		}
 		
 		mypos -= sectorsList.size();
 		nPolice -= sectorsList.size();
