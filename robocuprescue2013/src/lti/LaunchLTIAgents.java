@@ -16,6 +16,9 @@ import rescuecore2.standard.messages.StandardMessageFactory;
 
 public final class LaunchLTIAgents {
 
+	//TODO: For the competition, set to false
+	private static final boolean VERBOSE_LAUNCH = true;
+	
 	private static final int MAX_PLATOONS = 50;
 	private static final int MAX_CENTRES = 5;
 	
@@ -79,17 +82,26 @@ public final class LaunchLTIAgents {
 		String[] cnsplit = classname.split("[.]");
 		String agentname = cnsplit[cnsplit.length - 1];
 		
-		System.out.println("Started launching " + agentname + "s >>>");
+		log("Started launching " + agentname + "s >>>");
 		try {
 			for (int i = 1; i < max_agents; i++) {
-				System.out.println("Launching " + agentname + " " + i + "... ");
+				log("Launching " + agentname + " " + i + "... ");
 				launcher.connect((Component) Class.forName(classname).newInstance());
-				System.out.println(agentname + " " + i + " launched.");
+				log(agentname + " " + i + " launched.");
 			}
 		} catch (Exception e) {
-			System.out.println(e.getMessage());
+			log(e.getMessage());
 		}
-		System.out.println("<<< Finished launching " + agentname + "s.");
-		System.out.println();
+		log("<<< Finished launching " + agentname + "s.");
+		log_newline();
+	}
+	
+	private static void log_newline() {
+		log("");
+	}
+	
+	private static void log(String msg) {
+		if (VERBOSE_LAUNCH)
+			System.out.println(msg);
 	}
 }
