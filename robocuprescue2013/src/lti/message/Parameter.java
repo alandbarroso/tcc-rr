@@ -6,9 +6,11 @@ public class Parameter {
 	 * Message operation
 	 */
 	public enum Operation {
-		NONE(1), FIRE(17), VICTIM(25), BLOCKADE(21), TASK_PICKUP(5), TASK_DROP(
-				5), BLOCKADE_CLEARED(5), VICTIM_DIED(5), VICTIM_RESCUED(5), FIRE_EXTINGUISHED(
-				5), BUILDING_BURNT(5);
+		// size == attributes.length * 4 + 1
+		NONE(1), FIRE(17), VICTIM(25), BLOCKADE(21),
+		TASK_PICKUP(5), TASK_DROP(5), BLOCKADE_CLEARED(5),
+		VICTIM_DIED(5), VICTIM_RESCUED(5), FIRE_EXTINGUISHED(5),
+		BUILDING_BURNT(5), HELP_CIVILIAN(13);
 
 		// Operation array size
 		private int size;
@@ -72,6 +74,8 @@ public class Parameter {
 				operation = FIRE_EXTINGUISHED;
 			} else if (numOperation == BUILDING_BURNT.getByte()) {
 				operation = BUILDING_BURNT;
+			} else if (numOperation == HELP_CIVILIAN.getByte()) {
+				operation = HELP_CIVILIAN;
 			}
 
 			return operation;
