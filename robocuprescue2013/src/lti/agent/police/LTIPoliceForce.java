@@ -734,7 +734,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		if (this.channelComm) {
 			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
 				for (Pair<Integer, Integer> channel : channelList) {
-					sendSpeak(currentTime, channel.first(), msg.getMessage());
+					sendSpeak(currentTime, channel.first(),
+							msg.getMessage(channel.second().intValue()));
 				}
 			}
 		}

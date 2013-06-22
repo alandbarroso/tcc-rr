@@ -24,6 +24,7 @@ import lti.message.type.TaskPickup;
 import lti.message.type.Victim;
 import lti.message.type.VictimDied;
 import lti.message.type.VictimRescued;
+import lti.utils.PairComparator;
 import lti.utils.Search;
 
 import rescuecore2.Constants;
@@ -229,21 +230,25 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	 * and choose one or more to communicate
 	 */
 	private void chooseAndSubscribeToRadioChannels() {
-		int chosenChannel = 0;
-		int maxBandwidth = 0;
+		channelList = new ArrayList<Pair<Integer, Integer>>();
+		List<Pair<Integer, Integer>> auxList = new ArrayList<Pair<Integer, Integer>>();
 		for (int i = 0; i < numChannels; i++) {
 			if (config.getValue(PREFIX_CHANNELS + i + ".type").equalsIgnoreCase("radio")) {
 				int bandwidth = config.getIntValue(PREFIX_CHANNELS + i + ".bandwidth");
-				channelList.add(new Pair<Integer, Integer>(i, bandwidth));
-				if (bandwidth > maxBandwidth) {
-					maxBandwidth = bandwidth;
-					chosenChannel = i;
-				}
+				auxList.add(new Pair<Integer, Integer>(i, bandwidth));
+			} else {
+				int size = config.getIntValue(PREFIX_CHANNELS + i + ".messages.size");
+				channelList.add(new Pair<Integer, Integer>(i, size));
 			}
 		}
-		sendSubscribe(currentTime, chosenChannel);
-		log("Subscribed to channel " + chosenChannel +
-				" with bandwidth: " + maxBandwidth + " from options: " + channelList);
+		
+		PairComparator c = new PairComparator(auxList);
+		Collections.sort(auxList, c);
+		for (int i = 0; i < maxChannelPlatoon; i++) {
+			channelList.add(new Pair<Integer, Integer>(auxList.get(i).first(), auxList.get(i).second()));
+			sendSubscribe(currentTime, auxList.get(i).first());
+		}
+		log("Subscribed to channels " + channelList + " from Radio-options: " + auxList);
 	}
 
 	protected List<EntityID> randomWalk() {
@@ -389,8 +394,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	private void readMsg(ChangeSet changed, Command cmd) {
 		Message speakMsg;
 		speakMsg = new Message(((AKSpeak) cmd).getContent());
-		//log("Speak from:" + cmd.getAgentID() + " channel:" +
-		//		((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
+		log("Speak from:" + cmd.getAgentID() + " channel:" +
+				((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
 		for (Parameter param : speakMsg.getParameters()) {
 			switch (param.getOperation()) {
 			case FIRE:

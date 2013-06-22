@@ -3,6 +3,9 @@ package lti.message;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
 import lti.message.Parameter.Operation;
 import lti.message.type.Blockade;
 import lti.message.type.BlockadeCleared;
@@ -128,19 +131,34 @@ public class Message {
 	 * @return Message
 	 */
 	public byte[] getMessage() {
-		byte[] msg = new byte[this.size];
+		return getMessage(this.size);
+	}
+	
+	public byte[] getMessage(int intValue) {
+		List<Byte> msg = new ArrayList<Byte>();
 
-		int i = 0;
 		byte[] tmp;
-		for (Parameter param : this.params) {
-			msg[i++] = param.getOperation().getByte();
+		List<Parameter> p = new ArrayList<Parameter>(this.params);
+		Collections.shuffle(p);
+		for (Parameter param : p) {
+			if (msg.size() + param.getOperation().getSize() > intValue)
+				break;
+			msg.add(param.getOperation().getByte());
 			tmp = param.getByteAttributes();
 			for (int j = 0; j < tmp.length; j++) {
-				msg[i++] = tmp[j];
+				msg.add(tmp[j]);
 			}
 		}
-
-		return msg;
+		
+		return toByteArray(msg);
+	}
+	
+	byte[] toByteArray(List<Byte> list)  {
+	    byte[] ret = new byte[list.size()];
+	    int i = 0;
+	    for (Byte e : list)  
+	        ret[i++] = e.byteValue();
+	    return ret;
 	}
 
 	/**
