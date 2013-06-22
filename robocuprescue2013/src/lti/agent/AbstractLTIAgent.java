@@ -15,6 +15,7 @@ import lti.message.Message;
 import lti.message.Parameter;
 import lti.message.type.BlockadeCleared;
 import lti.message.type.BuildingBurnt;
+import lti.message.type.BuildingEntranceCleared;
 import lti.message.type.Fire;
 import lti.message.type.FireExtinguished;
 import lti.message.type.Help;
@@ -51,6 +52,9 @@ import rescuecore2.worldmodel.EntityID;
 public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		StandardAgent<E> {
 
+	//TODO: For the competition, set to false
+	protected static final boolean VERBOSE = true;
+	
 	protected static final int RANDOM_WALK_LENGTH = 5;
 
 	private static final String MAX_SIGHT_KEY = "perception.los.max-distance";
@@ -129,6 +133,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	protected boolean blocked;
 
 	protected EntityID taskDropped;
+	
+	protected Set<EntityID> buildingEntrancesCleared;
 
 	@Override
 	protected void postConnect() {
@@ -191,6 +197,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		knownBlockades = new HashSet<EntityID>();
 
 		knownVictims = new HashSet<EntityID>();
+		
+		buildingEntrancesCleared = new HashSet<EntityID>();
 	}
 
 	@Override
@@ -368,7 +376,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		removeNonExistingBlockadesFromModel(changed);
 
 		for (Command cmd : heard) {
-			if (cmd instanceof AKSpeak) {
+			if (cmd instanceof AKSpeak && cmd.getAgentID() != me().getID()) {
 				readMsg(changed, cmd);
 			}
 		}
@@ -418,11 +426,24 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 			case HELP_CIVILIAN:
 				readMsgCivilianHeard(param, changed, cmd);
 				break;
+			case BUILDING_ENTRANCE_CLEARED:
+				readMsgBuildingEntranceCleared(param);
+				break;
 			default:
 				log("Message with non-recognized type: " +
 						param.getOperation());
 			}
 		}
+	}
+
+	private void readMsgBuildingEntranceCleared(Parameter param) {
+		if (!(param instanceof BuildingEntranceCleared))
+			return;
+		
+		BuildingEntranceCleared building = (BuildingEntranceCleared) param;
+		EntityID e = new EntityID(building.getBuildingID());
+		if (!buildingEntrancesCleared.contains(e))
+			buildingEntrancesCleared.add(e);
 	}
 
 	private void readMsgCivilianHeard(Parameter param, ChangeSet changed, Command cmd) {
@@ -650,11 +671,11 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		TaskPickup task = (TaskPickup) param;
 		EntityID taskID = new EntityID(task.getTask());
 
-		if (taskTable.containsKey(taskID)) {
-			while (taskTable.values().remove(cmd.getAgentID())) {}
-
-			taskTable.get(taskID).add(cmd.getAgentID());
-		}
+		for (Set<EntityID> s : taskTable.values())
+			s.remove(cmd.getAgentID());
+		if (!taskTable.containsKey(taskID))
+			taskTable.put(taskID, new HashSet<EntityID>());
+		taskTable.get(taskID).add(cmd.getAgentID());
 	}
 
 	/**
@@ -987,11 +1008,12 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 			if (entity != null && entity instanceof Human) {
 				Human human = (Human) entity;
 
-				if (human.getHP() == 0) {
+				if (human.isHPDefined() && human.getHP() == 0) {
 					VictimDied death = new VictimDied(victim.getValue());
 					message.addParameter(death);
 					toRemove.add(victim);
-				} else if (human.getBuriedness() == 0) {
+				} else if (human.isBuriednessDefined() &&
+						human.getBuriedness() == 0) {
 					VictimRescued rescue = new VictimRescued(victim.getValue());
 					message.addParameter(rescue);
 					toRemove.add(victim);
@@ -1023,16 +1045,17 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	}
 	
 	protected void log(String s) {
-		String[] type_agent = me().getURN().split(":");
+		if (VERBOSE) {
+			String[] type_agent = me().getURN().split(":");
 
-		String msg_erro =
-				"T" + currentTime +
-			" " + type_agent[type_agent.length - 1] + internalID + 
-			" ID" + me().getID() +
-			" Pos:(" + currentX + "," + currentY + ")@" + currentPosition;
-		if (s != "")
-			msg_erro += " - " + s;
-		//TODO: Remove for competition
-		System.out.println(msg_erro);
+			String msg_erro =
+					"T" + currentTime +
+				" " + type_agent[type_agent.length - 1] + internalID + 
+				" ID" + me().getID() +
+				" Pos:(" + currentX + "," + currentY + ")@" + currentPosition;
+			if (s != "")
+				msg_erro += " - " + s;
+			System.out.println(msg_erro);
+		}
 	}
 }
