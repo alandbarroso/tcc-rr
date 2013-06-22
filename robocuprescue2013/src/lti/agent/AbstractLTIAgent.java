@@ -9,18 +9,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import kernel.KernelConstants;
+
 import lti.message.Message;
 import lti.message.Parameter;
-import lti.message.Parameter.Operation;
 import lti.message.type.BlockadeCleared;
 import lti.message.type.BuildingBurnt;
+import lti.message.type.BuildingEntranceCleared;
 import lti.message.type.Fire;
 import lti.message.type.FireExtinguished;
+import lti.message.type.Help;
 import lti.message.type.TaskDrop;
 import lti.message.type.TaskPickup;
 import lti.message.type.Victim;
 import lti.message.type.VictimDied;
 import lti.message.type.VictimRescued;
+import lti.utils.PairComparator;
 import lti.utils.Search;
 
 import rescuecore2.Constants;
@@ -49,6 +53,9 @@ import rescuecore2.worldmodel.EntityID;
 public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		StandardAgent<E> {
 
+	//TODO: For the competition, set to false
+	protected static final boolean VERBOSE = true;
+	
 	protected static final int RANDOM_WALK_LENGTH = 5;
 
 	private static final String MAX_SIGHT_KEY = "perception.los.max-distance";
@@ -132,6 +139,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	//TODO: Pegar um valor mais condizente, talvez no ambiente do simulador
 	protected int maxDistanceTraveledPerCycle = 500;
 
+	protected Set<EntityID> buildingEntrancesCleared;
+
 	@Override
 	protected void postConnect() {
 		super.postConnect();
@@ -193,43 +202,57 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		knownBlockades = new HashSet<EntityID>();
 
 		knownVictims = new HashSet<EntityID>();
+		
+		buildingEntrancesCleared = new HashSet<EntityID>();
 	}
 
 	@Override
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
+		recalculaVariaveisCiclo(time);
+
+		// Subscribe to a communication channel
+		if (time == config.getIntValue(KernelConstants.IGNORE_AGENT_COMMANDS_KEY))
+			if (channelComm && maxChannelPlatoon >= 1)
+				chooseAndSubscribeToRadioChannels();
+
+		refreshWorldModel(changed, heard);
+
+		refreshTaskTable(changed);
+	}
+
+	private void recalculaVariaveisCiclo(int time) {
 		lastPosition = currentPosition;
 		currentPosition = location().getID();
 		lastX = currentX;
 		lastY = currentY;
 		currentTime = time;	
 		taskDropped = null;
+	}
 
-		// Subscribe to a communication channel
-		if (time == config.getIntValue(kernel.KernelConstants.IGNORE_AGENT_COMMANDS_KEY)) {
-			if (channelComm && maxChannelPlatoon >= 1) {
-				int chosenChannel = 0;
-				int maxBandwidth = 0;
-				for (int i = 0; i < numChannels; i++) {
-					if (config.getValue(PREFIX_CHANNELS + i + ".type").equalsIgnoreCase("radio")) {
-						int bandwidth = config.getIntValue(PREFIX_CHANNELS + i + ".bandwidth");
-						channelList.add(new Pair<Integer, Integer>(i, bandwidth));
-						if (bandwidth > maxBandwidth) {
-							maxBandwidth = bandwidth;
-							chosenChannel = i;
-						}
-					}
-				}
-				sendSubscribe(time, chosenChannel);
-				log("Subscribed to channel " + chosenChannel +
-						" with bandwidth: " + maxBandwidth + " from options: " + channelList);
+	/**
+	 * Get the list of all possible means of communication
+	 * and choose one or more to communicate
+	 */
+	private void chooseAndSubscribeToRadioChannels() {
+		channelList = new ArrayList<Pair<Integer, Integer>>();
+		List<Pair<Integer, Integer>> auxList = new ArrayList<Pair<Integer, Integer>>();
+		for (int i = 0; i < numChannels; i++) {
+			if (config.getValue(PREFIX_CHANNELS + i + ".type").equalsIgnoreCase("radio")) {
+				int bandwidth = config.getIntValue(PREFIX_CHANNELS + i + ".bandwidth");
+				auxList.add(new Pair<Integer, Integer>(i, bandwidth));
+			} else {
+				int size = config.getIntValue(PREFIX_CHANNELS + i + ".messages.size");
+				channelList.add(new Pair<Integer, Integer>(i, size));
 			}
 		}
-
-		// Refresh the World Model
-		refreshWorldModel(changed, heard);
-
-		// Refresh the Task Table
-		refreshTaskTable(changed);
+		
+		PairComparator c = new PairComparator(auxList);
+		Collections.sort(auxList, c);
+		for (int i = 0; i < maxChannelPlatoon; i++) {
+			channelList.add(new Pair<Integer, Integer>(auxList.get(i).first(), auxList.get(i).second()));
+			sendSubscribe(currentTime, auxList.get(i).first());
+		}
+		log("Subscribed to channels " + channelList + " from Radio-options: " + auxList);
 	}
 
 	protected List<EntityID> randomWalk() {
@@ -352,292 +375,479 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	/**
 	 * Atualiza o modelo de mundo do agente de acordo com o que ele enxerga no
 	 * momento e as mensagens por ele recebidas
+	 * 
+	 * Para cada parâmetro da mensagem, verificar qual é o seu tipo
+	 * e, caso à entidade à qual a mensagem se refere não esteja
+	 * visível, atualizar o modelo de mundo de acordo.
 	 */
 	protected void refreshWorldModel(ChangeSet changed,
 			Collection<Command> heard) {
-		Set<StandardEntity> blockades = new HashSet<StandardEntity>(
-				model.getEntitiesOfType(StandardEntityURN.BLOCKADE));
+		removeNonExistingBlockadesFromModel(changed);
 
-		/*
-		 * Remove blockades that do not exist anymore (blockades the agent
-		 * should see, but does not)
-		 */
-		for (StandardEntity next : blockades) {
-			if (((Blockade) next).getPosition().equals(currentPosition)
-					&& !getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE,
-							changed).contains(next.getID())) {
-				model.removeEntity(next);
+		for (Command cmd : heard) {
+			if (cmd instanceof AKSpeak && cmd.getAgentID() != me().getID()) {
+				readMsg(changed, cmd);
+			}
+		}
+	}
+
+	/**
+	 * @param changed
+	 * @param cmd
+	 */
+	private void readMsg(ChangeSet changed, Command cmd) {
+		Message speakMsg;
+		speakMsg = new Message(((AKSpeak) cmd).getContent());
+		log("Speak from:" + cmd.getAgentID() + " channel:" +
+				((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
+		for (Parameter param : speakMsg.getParameters()) {
+			switch (param.getOperation()) {
+			case FIRE:
+				readMsgFire(param, changed);
+				break;
+			case BLOCKADE:
+				readMsgBlockade(param, changed);
+				break;
+			case VICTIM:
+				readMsgVictim(param, changed);
+				break;
+			case TASK_DROP:
+				readMsgTaskDrop(param, cmd);
+				break;
+			case TASK_PICKUP:
+				readMsgTaskPickup(param, cmd);
+				break;
+			case BLOCKADE_CLEARED:
+				readMsgBlockadeCleared(param);
+				break;
+			case VICTIM_DIED:
+				readMsgVictimDied(param, changed);
+				break;
+			case VICTIM_RESCUED:
+				readMsgVictimRescued(param, changed);
+				break;
+			case FIRE_EXTINGUISHED:
+				readMsgFireExtinguished(param, changed);
+				break;
+			case BUILDING_BURNT:
+				readMsgBuildingBurnt(param, changed);
+				break;
+			case HELP_CIVILIAN:
+				readMsgCivilianHeard(param, changed, cmd);
+				break;
+			case BUILDING_ENTRANCE_CLEARED:
+				readMsgBuildingEntranceCleared(param);
+				break;
+			default:
+				log("Message with non-recognized type: " +
+						param.getOperation());
+			}
+		}
+	}
+
+	private void readMsgBuildingEntranceCleared(Parameter param) {
+		if (!(param instanceof BuildingEntranceCleared))
+			return;
+		
+		BuildingEntranceCleared building = (BuildingEntranceCleared) param;
+		EntityID e = new EntityID(building.getBuildingID());
+		if (!buildingEntrancesCleared.contains(e))
+			buildingEntrancesCleared.add(e);
+	}
+
+	private void readMsgCivilianHeard(Parameter param, ChangeSet changed, Command cmd) {
+		if (!(param instanceof Help))
+			return;
+		
+		Help help = (Help) param;
+		EntityID victimID = cmd.getAgentID();
+
+		// For now, only treat as victims civilians who are buried
+		if (changed.getChangedEntities().contains(victimID) ||
+				help.isBuriedness() == 0)
+			return;
+		
+		StandardEntity entity = model.getEntity(victimID);
+		Human human;
+
+		if (entity != null && entity instanceof Human) {
+			switch (entity.getStandardURN()) {
+			case FIRE_BRIGADE:
+				human = (FireBrigade) entity;
+				break;
+			case POLICE_FORCE:
+				human = (PoliceForce) entity;
+				break;
+			case AMBULANCE_TEAM:
+				human = (AmbulanceTeam) entity;
+				break;
+			default:
+				human = (Civilian) entity;
+			}
+		} else {
+			switch (help.getURN()) {
+			case FIRE_BRIGADE:
+				human = new FireBrigade(victimID);
+				break;
+			case POLICE_FORCE:
+				human = new PoliceForce(victimID);
+				break;
+			case AMBULANCE_TEAM:
+				human = new AmbulanceTeam(victimID);
+				break;
+			default:
+				human = new Civilian(victimID);
 			}
 		}
 
-		Message speakMsg;
-		for (Command cmd : heard) {
-			if (cmd instanceof AKSpeak) {
-				speakMsg = new Message(((AKSpeak) cmd).getContent());
+		human.setPosition(currentPosition);
+		human.setHP(1);
+		human.setDamage(help.isDamage());
+		human.setBuriedness(help.isBuriedness());
 
-				/*
-				 * Para cada parâmetro da mensagem, verificar qual é o seu tipo
-				 * e, caso à entidade à qual a mensagem se refere não esteja
-				 * visível, atualizar o modelo de mundo de acordo.
-				 */
+		if (model.getEntity(victimID) == null) {
+			//model.addEntity(human);
+			// Even though the victim is not in the same place it was heard,
+			// it's the best shot we have
+			//knownVictims.add(victimID);
+			//log("in");
+		}
+	}
 
-				// Avalia se foi identificado um novo incêndio
-				for (Parameter param : speakMsg.getParameters()) {
-					if (param.getOperation().equals(Operation.FIRE)
-							&& param instanceof Fire) {
-						Fire fire = (Fire) param;
-						EntityID buildingID = new EntityID(fire.getBuilding());
+	/**
+	 * Avalia se algum prédio foi complemente queimado
+	 * 
+	 * @param param
+	 * @param changed
+	 */
+	private void readMsgBuildingBurnt(Parameter param, ChangeSet changed) {
+		if (!(param instanceof BuildingBurnt))
+			return;
+		
+		BuildingBurnt fire = (BuildingBurnt) param;
+		EntityID buildingID = new EntityID(fire.getBuilding());
 
-						if (!changed.getChangedEntities().contains(buildingID)) {
-							StandardEntity entity = model.getEntity(buildingID);
-							Building building;
+		if (changed.getChangedEntities().contains(buildingID))
+			return;
+		
+		StandardEntity entity = model.getEntity(buildingID);
 
-							if (entity != null && entity instanceof Building) {
-								building = (Building) entity;
-							} else {
-								building = new Building(buildingID);
-							}
+		if (entity != null && entity instanceof Building) {
+			Building building = (Building) entity;
+			building.setFieryness(Fieryness.BURNT_OUT.ordinal());
+			model.addEntity(building);
+			buildingsOnFire.remove(buildingID);
+		}
+	}
 
-							building.setFieryness(fire.getIntensity());
-							building.setGroundArea(fire.getGroundArea());
-							building.setFloors(fire.getFloors());
+	/**
+	 * Avalia se há algum incêndio extinto
+	 * 
+	 * @param param
+	 * @param changed
+	 */
+	private void readMsgFireExtinguished(Parameter param, ChangeSet changed) {
+		if (!(param instanceof FireExtinguished))
+			return;
+		
+		FireExtinguished fire = (FireExtinguished) param;
+		EntityID buildingID = new EntityID(fire.getBuilding());
 
-							model.addEntity(building);
-							// Esse incêndio passa a ser conhecido
-							buildingsOnFire.add(buildingID);
-						}
-					}
+		if (changed.getChangedEntities().contains(buildingID))
+			return;
+		
+		StandardEntity entity = model.getEntity(buildingID);
 
-					// Avalia se foi identificado um novo bloqueio
-					else if (param.getOperation().equals(Operation.BLOCKADE)
-							&& param instanceof lti.message.type.Blockade) {
-						lti.message.type.Blockade blockade = (lti.message.type.Blockade) param;
-						EntityID blockadeID = new EntityID(
-								blockade.getBlockade());
+		if (entity != null && entity instanceof Building) {
+			Building building = (Building) entity;
+			building.setFieryness(Fieryness.WATER_DAMAGE.ordinal());
+			model.addEntity(building);
+			buildingsOnFire.remove(buildingID);
+		}
+	}
 
-						if (!changed.getChangedEntities().contains(blockadeID)) {
-							StandardEntity entity = model.getEntity(blockadeID);
-							Blockade block;
+	/**
+	 * Avalia se alguma vítima foi resgatada
+	 * 
+	 * @param param
+	 * @param changed
+	 */
+	private void readMsgVictimRescued(Parameter param, ChangeSet changed) {
+		if (!(param instanceof VictimRescued))
+			return;
+		
+		VictimRescued victim = (VictimRescued) param;
+		EntityID victimID = new EntityID(victim.getVictim());
 
-							if (entity != null && entity instanceof Blockade) {
-								block = (Blockade) entity;
-							} else {
-								block = new Blockade(blockadeID);
-							}
+		if (changed.getChangedEntities().contains(victimID))
+			return;
+		
+		StandardEntity entity = model.getEntity(victimID);
+		Human human;
 
-							block.setPosition(new EntityID(blockade.getRoad()));
-							block.setX(blockade.getX());
-							block.setY(blockade.getY());
-							block.setRepairCost(blockade.getCost());
+		if (entity != null && entity instanceof Human) {
+			switch (entity.getStandardURN()) {
+			case FIRE_BRIGADE:
+				human = (FireBrigade) entity;
+				break;
+			case POLICE_FORCE:
+				human = (PoliceForce) entity;
+				break;
+			case AMBULANCE_TEAM:
+				human = (AmbulanceTeam) entity;
+				break;
+			default:
+				human = (Civilian) entity;
+			}
 
-							model.addEntity(block);
-							// O bloqueio passa a ser conhecido
-							knownBlockades.add(blockadeID);
-						}
-					}
-					// Avalia se foi identificada uam nova vítima
-					else if (param.getOperation().equals(Operation.VICTIM)
-							&& param instanceof Victim) {
-						Victim victim = (Victim) param;
-						EntityID victimID = new EntityID(victim.getVictim());
+			human.setBuriedness(0);
 
-						if (!changed.getChangedEntities().contains(victimID)) {
-							StandardEntity entity = model.getEntity(victimID);
-							Human human;
+			model.addEntity(human);
+			knownVictims.remove(victimID);
+		}
+	}
 
-							if (entity != null && entity instanceof Human) {
-								switch (entity.getStandardURN()) {
-								case FIRE_BRIGADE:
-									human = (FireBrigade) entity;
-									break;
+	/**
+	 * Avalia se alguma vítima morreu
+	 * 
+	 * @param param
+	 * @param changed
+	 */
+	private void readMsgVictimDied(Parameter param, ChangeSet changed) {
+		if (!(param instanceof VictimDied))
+			return;
+		
+		VictimDied victim = (VictimDied) param;
+		EntityID victimID = new EntityID(victim.getVictim());
 
-								case POLICE_FORCE:
-									human = (PoliceForce) entity;
-									break;
+		if (changed.getChangedEntities().contains(victimID))
+			return;
+		
+		StandardEntity entity = model.getEntity(victimID);
+		Human human;
 
-								case AMBULANCE_TEAM:
-									human = (AmbulanceTeam) entity;
-									break;
+		if (entity != null && entity instanceof Human) {
+			switch (entity.getStandardURN()) {
+			case FIRE_BRIGADE:
+				human = (FireBrigade) entity;
+				break;
+			case POLICE_FORCE:
+				human = (PoliceForce) entity;
+				break;
+			case AMBULANCE_TEAM:
+				human = (AmbulanceTeam) entity;
+				break;
+			default:
+				human = (Civilian) entity;
+			}
 
-								default:
-									human = (Civilian) entity;
-								}
-							} else {
+			human.setHP(0);
 
-								switch (victim.getURN()) {
-								case FIRE_BRIGADE:
-									human = new FireBrigade(new EntityID(
-											victim.getVictim()));
-									break;
+			model.addEntity(human);
+			knownVictims.remove(victimID);
+		}
+	}
 
-								case POLICE_FORCE:
-									human = new PoliceForce(new EntityID(
-											victim.getVictim()));
-									break;
+	/**
+	 * Avalia se algum bloqueio foi removido
+	 * @param param
+	 */
+	private void readMsgBlockadeCleared(Parameter param) {
+		if (!(param instanceof BlockadeCleared))
+			return;
+		
+		BlockadeCleared blockade = (BlockadeCleared) param;
+		EntityID blockadeID = new EntityID(
+				blockade.getBlockade());
 
-								case AMBULANCE_TEAM:
-									human = new AmbulanceTeam(new EntityID(
-											victim.getVictim()));
-									break;
+		if (model.getEntity(blockadeID) != null
+				&& model.getEntity(blockadeID) instanceof Blockade) {
+			model.removeEntity(blockadeID);
+			knownBlockades.remove(blockadeID);
+		}
+	}
 
-								default:
-									human = new Civilian(new EntityID(
-											victim.getVictim()));
-								}
-							}
+	/**
+	 * Avalia se algum agente passou a atuar em uma tarefa
+	 * 
+	 * @param param
+	 * @param cmd
+	 */
+	private void readMsgTaskPickup(Parameter param, Command cmd) {
+		if (!(param instanceof TaskPickup))
+			return;
+		
+		TaskPickup task = (TaskPickup) param;
+		EntityID taskID = new EntityID(task.getTask());
 
-							human.setPosition(new EntityID(victim.getPosition()));
-							human.setHP(victim.getHP());
-							human.setDamage(victim.getDamage());
-							human.setBuriedness(victim.getBuriedness());
+		for (Set<EntityID> s : taskTable.values())
+			s.remove(cmd.getAgentID());
+		if (!taskTable.containsKey(taskID))
+			taskTable.put(taskID, new HashSet<EntityID>());
+		taskTable.get(taskID).add(cmd.getAgentID());
+	}
 
-							model.addEntity(human);
-							knownVictims.add(victimID);
-						}
-					}
-					// Algum agente abandonou uma tarefa
-					else if (param.getOperation().equals(Operation.TASK_DROP)
-							&& param instanceof TaskDrop) {
-						TaskDrop task = (TaskDrop) param;
-						EntityID taskID = new EntityID(task.getTask());
+	/**
+	 * Avalia se algum agente abandonou uma tarefa
+	 * Remove o ID do agente em questão do conjunto de agentes
+	 * agindo sobre aquela tarefa
+	 * 
+	 * @param param
+	 * @param cmd
+	 */
+	private void readMsgTaskDrop(Parameter param, Command cmd) {
+		 if (!(param instanceof TaskDrop))
+			 return;
+		 
+		TaskDrop task = (TaskDrop) param;
+		EntityID taskID = new EntityID(task.getTask());
+		
+		if (taskTable.containsKey(taskID))
+			taskTable.get(taskID).remove(cmd.getAgentID());
+	}
 
-						/*
-						 * Remove o ID deste agente do conjunto de agentes
-						 * agindo sobre aquela tarefa
-						 */
-						if (taskTable.containsKey(taskID)) {
-							taskTable.get(taskID).remove(cmd.getAgentID());
-						}
-					}
-					// Algum agente passou a atuar em uma tarefa
-					else if (param.getOperation().equals(Operation.TASK_PICKUP)
-							&& param instanceof TaskPickup) {
-						TaskPickup task = (TaskPickup) param;
-						EntityID taskID = new EntityID(task.getTask());
+	/**
+	 * Avalia se foi identificada uma nova vítima
+	 * @param param
+	 * @param changed
+	 */
+	private void readMsgVictim(Parameter param, ChangeSet changed) {
+		if (!(param instanceof Victim))
+			return;
+		
+		Victim victim = (Victim) param;
+		EntityID victimID = new EntityID(victim.getVictim());
 
-						if (taskTable.containsKey(taskID)) {
-							if (taskTable.values().contains(cmd.getAgentID())) {
-								taskTable.values().remove(cmd.getAgentID());
-							}
+		if (changed.getChangedEntities().contains(victimID))
+			return;
+		
+		StandardEntity entity = model.getEntity(victimID);
+		Human human;
 
-							taskTable.get(taskID).add(cmd.getAgentID());
-						}
-					} else if (param.getOperation().equals(
-							Operation.BLOCKADE_CLEARED)
-							&& param instanceof BlockadeCleared) {
-						BlockadeCleared blockade = (BlockadeCleared) param;
-						EntityID blockadeID = new EntityID(
-								blockade.getBlockade());
+		if (entity != null && entity instanceof Human) {
+			switch (entity.getStandardURN()) {
+			case FIRE_BRIGADE:
+				human = (FireBrigade) entity;
+				break;
+			case POLICE_FORCE:
+				human = (PoliceForce) entity;
+				break;
+			case AMBULANCE_TEAM:
+				human = (AmbulanceTeam) entity;
+				break;
+			default:
+				human = (Civilian) entity;
+			}
+		} else {
+			switch (victim.getURN()) {
+			case FIRE_BRIGADE:
+				human = new FireBrigade(victimID);
+				break;
+			case POLICE_FORCE:
+				human = new PoliceForce(victimID);
+				break;
+			case AMBULANCE_TEAM:
+				human = new AmbulanceTeam(victimID);
+				break;
+			default:
+				human = new Civilian(victimID);
+			}
+		}
 
-						if (model.getEntity(blockadeID) != null
-								&& model.getEntity(blockadeID) instanceof Blockade) {
-							model.removeEntity(blockadeID);
-							knownBlockades.remove(blockadeID);
-						}
-					} else if (param.getOperation().equals(
-							Operation.VICTIM_DIED)
-							&& param instanceof VictimDied) {
-						VictimDied victim = (VictimDied) param;
-						EntityID victimID = new EntityID(victim.getVictim());
+		human.setPosition(new EntityID(victim.getPosition()));
+		human.setHP(victim.getHP());
+		human.setDamage(victim.getDamage());
+		human.setBuriedness(victim.getBuriedness());
 
-						if (!changed.getChangedEntities().contains(victimID)) {
-							StandardEntity entity = model.getEntity(victimID);
-							Human human;
+		model.addEntity(human);
+		knownVictims.add(victimID);
+	}
 
-							if (entity != null && entity instanceof Human) {
-								switch (entity.getStandardURN()) {
-								case FIRE_BRIGADE:
-									human = (FireBrigade) entity;
-									break;
+	/**
+	 * Avalia se foi identificado um novo bloqueio
+	 * 
+	 * @param param
+	 * @param changed
+	 */
+	private void readMsgBlockade(Parameter param, ChangeSet changed) {
+		if(!(param instanceof lti.message.type.Blockade))
+			return;
+		
+		lti.message.type.Blockade blockade = (lti.message.type.Blockade) param;
+		EntityID blockadeID = new EntityID(blockade.getBlockade());
 
-								case POLICE_FORCE:
-									human = (PoliceForce) entity;
-									break;
+		if (changed.getChangedEntities().contains(blockadeID))
+			return;
+		
+		StandardEntity entity = model.getEntity(blockadeID);
+		Blockade block;
 
-								case AMBULANCE_TEAM:
-									human = (AmbulanceTeam) entity;
-									break;
+		if (entity != null && entity instanceof Blockade)
+			block = (Blockade) entity;
+		else
+			block = new Blockade(blockadeID);
+		
+		block.setPosition(new EntityID(blockade.getRoad()));
+		block.setX(blockade.getX());
+		block.setY(blockade.getY());
+		block.setRepairCost(blockade.getCost());
 
-								default:
-									human = (Civilian) entity;
-								}
+		model.addEntity(block);
+		// O bloqueio passa a ser conhecido
+		knownBlockades.add(blockadeID);
+	}
 
-								human.setHP(0);
+	/**
+	 * Avalia se foi identificado um novo incêndio
+	 * 
+	 * @param param
+	 * @param changed
+	 */
+	private void readMsgFire(Parameter param, ChangeSet changed) {
+		if (!(param instanceof Fire))
+			return;
+		
+		Fire fire = (Fire) param;
+		EntityID buildingID = new EntityID(fire.getBuilding());
 
-								model.addEntity(human);
-								knownVictims.remove(victimID);
-							}
-						}
-					} else if (param.getOperation().equals(
-							Operation.VICTIM_RESCUED)
-							&& param instanceof VictimRescued) {
-						VictimRescued victim = (VictimRescued) param;
-						EntityID victimID = new EntityID(victim.getVictim());
+		if (changed.getChangedEntities().contains(buildingID))
+			return;
+		
+		StandardEntity entity = model.getEntity(buildingID);
+		Building building;
 
-						if (!changed.getChangedEntities().contains(victimID)) {
-							StandardEntity entity = model.getEntity(victimID);
-							Human human;
+		if (entity != null && entity instanceof Building)
+			building = (Building) entity;
+		else
+			building = new Building(buildingID);
 
-							if (entity != null && entity instanceof Human) {
-								switch (entity.getStandardURN()) {
-								case FIRE_BRIGADE:
-									human = (FireBrigade) entity;
-									break;
+		building.setFieryness(fire.getIntensity());
+		building.setGroundArea(fire.getGroundArea());
+		building.setFloors(fire.getFloors());
 
-								case POLICE_FORCE:
-									human = (PoliceForce) entity;
-									break;
+		model.addEntity(building);
+		// Esse incêndio passa a ser conhecido
+		buildingsOnFire.add(buildingID);
+	}
 
-								case AMBULANCE_TEAM:
-									human = (AmbulanceTeam) entity;
-									break;
-
-								default:
-									human = (Civilian) entity;
-								}
-
-								human.setBuriedness(0);
-
-								model.addEntity(human);
-								knownVictims.remove(victimID);
-							}
-						}
-					} else if (param.getOperation().equals(
-							Operation.FIRE_EXTINGUISHED)
-							&& param instanceof FireExtinguished) {
-						FireExtinguished fire = (FireExtinguished) param;
-						EntityID buildingID = new EntityID(fire.getBuilding());
-
-						if (!changed.getChangedEntities().contains(buildingID)) {
-							StandardEntity entity = model.getEntity(buildingID);
-
-							if (entity != null && entity instanceof Building) {
-								Building building = (Building) entity;
-								building.setFieryness(Fieryness.WATER_DAMAGE
-										.ordinal());
-								model.addEntity(building);
-								buildingsOnFire.remove(buildingID);
-							}
-						}
-					} else if (param.getOperation().equals(
-							Operation.BUILDING_BURNT)
-							&& param instanceof BuildingBurnt) {
-						BuildingBurnt fire = (BuildingBurnt) param;
-						EntityID buildingID = new EntityID(fire.getBuilding());
-
-						if (!changed.getChangedEntities().contains(buildingID)) {
-							StandardEntity entity = model.getEntity(buildingID);
-
-							if (entity != null && entity instanceof Building) {
-								Building building = (Building) entity;
-								building.setFieryness(Fieryness.BURNT_OUT
-										.ordinal());
-								model.addEntity(building);
-								buildingsOnFire.remove(buildingID);
-							}
-						}
-					}
-				}
+	/**
+	 * Remove blockades that do not exist anymore (blockades the agent
+	 * should see, but does not
+	 * @param changed
+	 */
+	private void removeNonExistingBlockadesFromModel(ChangeSet changed) {
+		Set<StandardEntity> blockades = new HashSet<StandardEntity>(
+				model.getEntitiesOfType(StandardEntityURN.BLOCKADE));
+		Set<EntityID> visibleBlockades =
+				getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE, changed);
+		for (StandardEntity entity : blockades) {
+			Blockade block = (Blockade) entity;
+			EntityID positionBlockade = block.getPosition();
+			EntityID blockadeID = block.getID();
+			if (positionBlockade.equals(currentPosition)
+					&& !visibleBlockades.contains(blockadeID)) {
+				model.removeEntity(block);
+				knownBlockades.remove(blockadeID);
 			}
 		}
 	}
@@ -807,11 +1017,12 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 			if (entity != null && entity instanceof Human) {
 				Human human = (Human) entity;
 
-				if (human.getHP() == 0) {
+				if (human.isHPDefined() && human.getHP() == 0) {
 					VictimDied death = new VictimDied(victim.getValue());
 					message.addParameter(death);
 					toRemove.add(victim);
-				} else if (human.getBuriedness() == 0) {
+				} else if (human.isBuriednessDefined() &&
+						human.getBuriedness() == 0) {
 					VictimRescued rescue = new VictimRescued(victim.getValue());
 					message.addParameter(rescue);
 					toRemove.add(victim);
@@ -843,15 +1054,17 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	}
 	
 	protected void log(String s) {
-		String[] type_agent = me().getURN().split(":");
+		if (VERBOSE) {
+			String[] type_agent = me().getURN().split(":");
 
-		String msg_erro =
-				"T" + currentTime +
-			" " + type_agent[type_agent.length - 1] + internalID + 
-			" ID" + me().getID() +
-			" Pos:(" + currentX + "," + currentY + ")@" + currentPosition;
-		if (s != "")
-			msg_erro += " - " + s;
-		System.out.println(msg_erro);
+			String msg_erro =
+					"T" + currentTime +
+				" " + type_agent[type_agent.length - 1] + internalID + 
+				" ID" + me().getID() +
+				" Pos:(" + currentX + "," + currentY + ")@" + currentPosition;
+			if (s != "")
+				msg_erro += " - " + s;
+			System.out.println(msg_erro);
+		}
 	}
 }

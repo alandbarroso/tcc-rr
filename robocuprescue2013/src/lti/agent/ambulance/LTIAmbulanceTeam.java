@@ -144,7 +144,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		if (this.channelComm) {
 			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
 				for (Pair<Integer,Integer> channel : channelList) {
-					sendSpeak(time, channel.first(), msg.getMessage());
+					sendSpeak(time, channel.first(),
+							msg.getMessage(channel.second().intValue()));
 				}
 			}
 		}

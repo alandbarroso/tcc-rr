@@ -14,7 +14,10 @@ import lti.utils.EntityIDComparator;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.Building;
+import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.FireBrigade;
+import rescuecore2.standard.entities.GasStation;
+import rescuecore2.standard.entities.Hydrant;
 import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityURN;
@@ -32,9 +35,11 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private int maxPower;
 	private List<EntityID> refuges;
 	private List<EntityID> fireBrigadesList;
+	private List<EntityID> gasStationNeighbours;
 
 	private static enum State {
-		MOVING_TO_REFUGE, MOVING_TO_FIRE, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
+		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, 
+		MOVING_TO_GAS, MOVING_CLOSE_TO_GAS, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
 		EXTINGUISHING_FIRE, REFILLING, DEAD, BURIED
 	};
 
@@ -69,7 +74,9 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		for (Refuge r : ref) {
 			refuges.add(r.getID());
 		}
-
+		
+		gasStationNeighbours = calculateGasStationNeighbours();
+		
 		changeState(State.RANDOM_WALKING);
 	}
 
@@ -96,6 +103,12 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		// Verify if you are blocked
 		if (amIBlocked(time)) {
 			blocked = true;
+			
+			log("Blocked! Random walk to escape");
+			changeState(State.RANDOM_WALKING);
+			List<EntityID> path = randomWalk();
+			sendMove(time, path);
+			return;
 		}
 
 		dropTask(time, changed);
@@ -110,7 +123,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		if (this.channelComm) {
 			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
 				for (Pair<Integer,Integer> channel : channelList) {
-					sendSpeak(time, channel.first(), msg.getMessage());
+					sendSpeak(time, channel.first(),
+							msg.getMessage(channel.second().intValue()));
 				}
 			}
 		}
@@ -127,8 +141,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			}
 		}
 
-		// Am I at a refuge?
-		if (location() instanceof Refuge && me().isWaterDefined()
+		// Am I at a refuge or a hydrant?
+		if ((location() instanceof Refuge || location() instanceof Hydrant) && me().isWaterDefined()
 				&& me().getWater() < maxWater) {
 			sendRest(time);
 			changeState(State.REFILLING);
@@ -164,12 +178,56 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			if (path != null) {
 				path.remove(path.size() - 1);
 				sendMove(time, path);
-				changeState(State.MOVING_TO_FIRE);
+				
+				if(model.getEntity(target) instanceof GasStation)
+					changeState(State.MOVING_TO_GAS);
+				else if(closeToGas(target))
+					changeState(State.MOVING_CLOSE_TO_GAS);
+				else
+					changeState(State.MOVING_TO_FIRE);
 
 				if (!path.isEmpty()) {
 					target = path.get(path.size() - 1);
 				}
 
+				return;
+			}
+		}
+		
+		// If it has nothing to do and water level is below 80%, start finding a place to refill it
+		if(me().isWaterDefined() && me().getWater() < 0.8*this.maxWater){
+			log("I have nothing to do, i'll reffil, my water level is at " + ((float) me().getWater()/this.maxWater) + "!");
+			
+			// We analyze first if the level is below 50%
+			// If it is, we search for a refuge
+			if(me().getWater() < 0.5*this.maxWater){
+				log("Finding a refuge");
+				List<EntityID> path = search.breadthFirstSearch(location().getID(),
+						refuges);
+				changeState(State.MOVING_TO_REFUGE);
+
+				if (path == null) {
+					path = randomWalk();
+					log("Trying to move to refugee, but couldn't find path");
+					changeState(State.RANDOM_WALKING);
+				}
+				target = path.get(path.size() - 1);
+				sendMove(time, path);
+				return;
+			}
+			else{
+				log("Finding a hydrant");
+				List<EntityID> path = search.breadthFirstSearch(location().getID(),
+						getHydrants());
+				changeState(State.MOVING_TO_HYDRANT);
+
+				if (path == null) {
+					path = randomWalk();
+					log("Trying to move to hydrant, but couldn't find path");
+					changeState(State.RANDOM_WALKING);
+				}
+				target = path.get(path.size() - 1);
+				sendMove(time, path);
 				return;
 			}
 		}
@@ -196,6 +254,20 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		sendMove(time, path);
 		changeState(State.RANDOM_WALKING);
 		return;
+	}
+	
+	protected List<EntityID> getHydrants(){
+		List<EntityID> result = new ArrayList<EntityID>();
+		Collection<StandardEntity> b = model.
+				getEntitiesOfType(StandardEntityURN.HYDRANT); // List of hydrants
+		
+		for(StandardEntity next : b){
+			if(next instanceof Hydrant){
+				result.add(next.getID());;
+			}
+		}
+		
+		return result;
 	}
 
 	protected List<EntityID> getBurning() {
@@ -241,14 +313,46 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			}
 		}
 	}
-
+	
 	@Override
 	protected EntityID selectTask() {
 		int closest = Integer.MAX_VALUE;
 		EntityID result = null;
-
+		
+		// For all the buildings, we should prioritize those close to gas stations because they can explode
 		for (EntityID task : taskTable.keySet()) {
-			if (model.getDistance(me().getID(), task) < closest) {
+			// If result defined
+			if(result != null){
+				if(model.getEntity(task) instanceof GasStation) {
+					if(model.getEntity(result) instanceof GasStation) {
+						if (model.getDistance(me().getID(), task) < closest) {
+							closest = model.getDistance(me().getID(), task);
+							result = task;
+						}
+					} else{
+						closest = model.getDistance(me().getID(), task);
+						result = task;
+					}
+				}
+				else if(closeToGas(task) && !(model.getEntity(result) instanceof GasStation)) {
+					if(closeToGas(result)) {
+						if (model.getDistance(me().getID(), task) < closest) {
+							closest = model.getDistance(me().getID(), task);
+							result = task;
+						}
+					} else{
+						closest = model.getDistance(me().getID(), task);
+						result = task;
+					}
+				}
+				else if(!(model.getEntity(result) instanceof GasStation) && !closeToGas(result)){
+					if (model.getDistance(me().getID(), task) < closest) {
+						closest = model.getDistance(me().getID(), task);
+						result = task;
+					}
+				}
+			}
+			else {
 				closest = model.getDistance(me().getID(), task);
 				result = task;
 			}
@@ -294,5 +398,41 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private void changeState(State state) {
 		this.state = state;
 		log("Changed state to: " + this.state);
+	}
+	
+	// Used to calculate all the buildings near gas stations
+	private List<EntityID> calculateGasStationNeighbours(){
+		List<EntityID> result = new ArrayList<EntityID>();
+		
+		Collection<StandardEntity> gasStations = model.
+				getEntitiesOfType(StandardEntityURN.GAS_STATION); // Getting the list of Gas Stations
+		Collection<StandardEntity> buildings = model.
+				getEntitiesOfType(StandardEntityURN.BUILDING); // Getting the list of buildings
+		for(StandardEntity gs : gasStations){
+			if(gs instanceof GasStation){
+				log("GasStation: " + gs.getID());
+				
+				for(StandardEntity bd : buildings){
+					if(bd instanceof Building){
+						log("Building " + bd.getID() + " distance to gas: " + model.getDistance(gs.getID(), bd.getID()));
+						if(model.getDistance(gs.getID(), bd.getID()) < 25000){
+							log("Close building! Adding " + bd.getID() + " to neighbours!");
+							result.add(bd.getID());
+						}
+					}
+				}
+			}
+		}
+
+		
+		return result;
+	}
+	
+	// Verify if is a building is close to a gas station
+	private boolean closeToGas(EntityID ent){
+		if(gasStationNeighbours.contains(ent))
+			return true;
+		
+		return false;
 	}
 }
