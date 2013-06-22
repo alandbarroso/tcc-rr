@@ -583,6 +583,27 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			if (obstructingBlockade != null) {
 				clearObstructingBlockade();
 				return;
+			} else if (path.size() > 0) {
+				Rectangle2D rect = ((Road)model.getEntity(path.get(0))).getShape().getBounds2D();
+				Random rdn = new Random();
+				int x = (int)(rect.getMinX() + rdn.nextDouble()*(rect.getMaxX() - rect.getMinX()));
+				int y = (int)(rect.getMinY() + rdn.nextDouble()*(rect.getMaxY() - rect.getMinY()));
+				
+				if(rect.contains(x, y)) {
+					EntityID e = path.get(0);
+					path = new ArrayList<EntityID>();
+					path.add(e);
+					sendMove(time, path, x, y);
+					changeState(State.MOVING_TO_UNBLOCK);
+					log("Found path: " + path + " and sent move to dest: " +
+							x + "," + y);
+				} else {
+					path = randomWalk(time);
+					sendMove(time, path);
+					changeState(State.RANDOM_WALKING);
+					log("Path calculated to unblock and sent move: " + path);
+				}
+				return;
 			}
 		}
 
@@ -880,16 +901,15 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	@Override
 	protected void refreshWorldModel(ChangeSet changed,
 			Collection<Command> heard) {
-
+		Set<EntityID> visibleBlockades =
+				getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE, changed);
+		
 		// Remove the blockade the agent has finished clearing
 		if (state.equals(State.CLEARING)
-				&& !getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE,
-						changed).contains(target)) {
+				&& !visibleBlockades.contains(target)) {
 			model.removeEntity(target);
-
 		} else if (state.equals(State.CLEARING_PATH)
-				&& !getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE,
-						changed).contains(obstructingBlockade)) {
+				&& !visibleBlockades.contains(obstructingBlockade)) {
 			model.removeEntity(obstructingBlockade);
 			obstructingBlockade = null;
 		}
@@ -903,21 +923,21 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				model.getEntitiesOfType(StandardEntityURN.BLOCKADE));
 		Set<EntityID> blockadesIDs = new HashSet<EntityID>();
 
-		for (StandardEntity next : blockades) {
+		for (StandardEntity next : blockades)
 			blockadesIDs.add(next.getID());
-		}
 
 		// Discard blockades that do not exist anymore
 		taskTable.keySet().retainAll(blockadesIDs);
 
 		// Add new blockades to the task table
 		for (StandardEntity blockade : blockades) {
-			if (sector.getLocations().keySet()
-					.contains(((Blockade) blockade).getPosition())) {
-				if (!taskTable.containsKey(blockade.getID())) {
-					taskTable.put(blockade.getID(), new HashSet<EntityID>());
-				}
-			}
+			Blockade block = (Blockade)blockade;
+			EntityID blockID = block.getID();
+			EntityID blockPosition = block.getPosition();
+			
+			if (sector.getLocations().containsKey(blockPosition))
+				if (!taskTable.containsKey(blockID))
+					taskTable.put(blockID, new HashSet<EntityID>());
 		}
 	}
 
