@@ -236,10 +236,16 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	private void chooseAndSubscribeToRadioChannels() {
 		channelList = new ArrayList<Pair<Integer, Integer>>();
 		List<Pair<Integer, Integer>> auxList = new ArrayList<Pair<Integer, Integer>>();
+		int nAgents = model.getEntitiesOfType(
+				StandardEntityURN.AMBULANCE_TEAM,
+				StandardEntityURN.POLICE_FORCE,
+				StandardEntityURN.FIRE_BRIGADE).size();
+		
 		for (int i = 0; i < numChannels; i++) {
 			if (config.getValue(PREFIX_CHANNELS + i + ".type").equalsIgnoreCase("radio")) {
 				int bandwidth = config.getIntValue(PREFIX_CHANNELS + i + ".bandwidth");
-				auxList.add(new Pair<Integer, Integer>(i, bandwidth));
+				int bandwidthPerAgent = (int) (bandwidth / (nAgents * 0.7));
+				auxList.add(new Pair<Integer, Integer>(i, bandwidthPerAgent));
 			} else {
 				int size = config.getIntValue(PREFIX_CHANNELS + i + ".messages.size");
 				channelList.add(new Pair<Integer, Integer>(i, size));

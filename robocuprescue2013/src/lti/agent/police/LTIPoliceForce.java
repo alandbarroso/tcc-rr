@@ -561,8 +561,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		double importance;
 
 		log("taskTable: " + taskTable);
-		for (EntityID next : taskTable.keySet()) {
-			
+		log("knownVictims: " + knownVictims);
+		log("knownBlockades: " + knownBlockades);
+		for (EntityID next : taskTable.keySet()) {			
 			StandardEntity taskEntity = model.getEntity(next);
 			
 			//Se a tarefa for do tipo human, eh uma vitima para desbloqueio preventivo
