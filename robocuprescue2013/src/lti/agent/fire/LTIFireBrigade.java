@@ -14,7 +14,6 @@ import lti.utils.EntityIDComparator;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.Building;
-import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.GasStation;
 import rescuecore2.standard.entities.Hydrant;
