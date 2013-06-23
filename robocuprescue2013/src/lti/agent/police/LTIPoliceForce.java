@@ -220,24 +220,16 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				return;
 			}
 
-			log("No path to target: " + target);
+			log("No path to target: " + target + ", dropping this task");
+			target = null;
 		}
 
 		// Move around the map
 
-		if (clearEntranceTask) {
+		if (clearEntranceTask)
 			path = getPathToEntranceTarget();
-		} else {
-			if (sector.getLocations().keySet().contains(currentPosition)) {
-				path = randomWalk();
-				changeState(State.RANDOM_WALKING);
-			} else {
-				List<EntityID> local = new ArrayList<EntityID>(sector
-						.getLocations().keySet());
-				path = search.breadthFirstSearch(currentPosition, local);
-				changeState(State.RETURNING_TO_SECTOR);
-			}
-		}
+		else
+			path = randomWalk();
 
 		if (path != null) {
 			sendMove(time, path);
@@ -307,7 +299,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		} else {
 			path = randomWalk();
 			sendMove(currentTime, path);
-			changeState(State.RANDOM_WALKING);
 			log("Path calculated to unblock and sent move: " + path);
 		}
 	}
@@ -326,10 +317,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		}
 		if (path != null && path.size() > 0)
 			changeState(State.MOVING_TO_ENTRANCE_BUILDING);
-		else {
-			changeState(State.RANDOM_WALKING);
+		else
 			path = randomWalk();
-		}
 		return path;
 	}
 
@@ -475,7 +464,14 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 	protected List<EntityID> randomWalk() {
 		List<EntityID> result = new ArrayList<EntityID>();
-		EntityID current = ((Human) me()).getPosition();
+		EntityID current = currentPosition;
+		
+		if (!sector.getLocations().keySet().contains(currentPosition)) {
+			List<EntityID> local = new ArrayList<EntityID>(sector
+					.getLocations().keySet());
+			changeState(State.RETURNING_TO_SECTOR);
+			return search.breadthFirstSearch(currentPosition, local);
+		}
 
 		for (int i = 0; i < RANDOM_WALK_LENGTH; ++i) {
 			result.add(current);
@@ -501,6 +497,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		}
 
 		result.remove(0); // Remove actual position from path
+		changeState(State.RANDOM_WALKING);
 		return result;
 	}
 
