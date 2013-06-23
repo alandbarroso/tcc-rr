@@ -18,15 +18,11 @@ import java.util.TreeSet;
 
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
-import lti.message.Parameter;
-import lti.message.Parameter.Operation;
-import lti.message.type.TaskPickup;
 import lti.message.type.BuildingEntranceCleared;
 import lti.utils.EntityIDComparator;
 import area.Sector;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
-import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.Blockade;
 import rescuecore2.standard.entities.Building;
@@ -36,7 +32,6 @@ import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.Road;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityURN;
-import rescuecore2.standard.messages.AKSpeak;
 import rescuecore2.worldmodel.ChangeSet;
 import rescuecore2.worldmodel.EntityID;
 
@@ -57,7 +52,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private State state = null;
 
 	private static enum State {
-		RETURNING_TO_SECTOR, MOVING_TO_BLOCKADE, MOVING_TO_ENTRANCE_BUILDING, RANDOM_WALKING, MOVING_TO_UNBLOCK, CLEARING, BURIED, DEAD, CLEARING_PATH
+		RETURNING_TO_SECTOR, MOVING_TO_BLOCKADE,
+		MOVING_TO_ENTRANCE_BUILDING, RANDOM_WALKING, MOVING_TO_UNBLOCK,
+		CLEARING, BURIED, DEAD, CLEARING_PATH
 	};
 
 	private EntityID obstructingBlockade;
@@ -81,8 +78,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private List<EntityID> path;
 	
 	private boolean enablePreventiveClearing = false;
-	private List<Human> preventiveSavedVictims; 
-	private Human victimForPreventiveClearing;
+	private Set<StandardEntity> preventiveSavedVictims;
 	private boolean amIPreventiveClearing = false;
 	private boolean amIGoingToRefuge = false;
 	
@@ -160,7 +156,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		obstructingBlockade = null;
 		
-		preventiveSavedVictims = new ArrayList<Human>();
+		preventiveSavedVictims = new HashSet<StandardEntity>();
 	}
 
 	private Set<EntityID> getBuildingEntrancesToBeCleared(Sector s) {
@@ -596,82 +592,16 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		 */
 		if (amIBlocked(time)) {
 			obstructingBlockade = getBestClosestBlockadeToClear();
-			if (obstructingBlockade != null) {
+			if (obstructingBlockade != null)
 				clearObstructingBlockade();
-				return;
-			} else if (path.size() > 0) {
-				Rectangle2D rect = ((Road) model.getEntity(path.get(0)))
-						.getShape().getBounds2D();
-				Random rdn = new Random();
-				int x = (int) (rect.getMinX() + rdn.nextDouble()
-						* (rect.getMaxX() - rect.getMinX()));
-				int y = (int) (rect.getMinY() + rdn.nextDouble()
-						* (rect.getMaxY() - rect.getMinY()));
-
-				if (rect.contains(x, y)) {
-					EntityID e = path.get(0);
-					path = new ArrayList<EntityID>();
-					path.add(e);
-					sendMove(time, path, x, y);
-					changeState(State.MOVING_TO_UNBLOCK);
-					log("Found path: " + path + " and sent move to dest: " + x
-							+ "," + y);
-				} else {
-					path = randomWalk(time);
-					sendMove(time, path);
-					changeState(State.RANDOM_WALKING);
-					log("Path calculated to unblock and sent move: " + path);
-				}
-				return;
-			}
+			else if (path.size() > 0)
+				movingToUnblock();
+			return;
 		}
 		
-		if (enablePreventiveClearing) {
-			if (amIPreventiveClearing && target != null) {
-				
-				victimForPreventiveClearing = (Human) model.getEntity(target);
-				log("Preventive Clearing: Started for " +victimForPreventiveClearing);
-				if (!amIGoingToRefuge) {
-					if (currentPosition.equals(victimForPreventiveClearing
-							.getPosition())) {
-						log("Preventive Clearing: Arrived At Victim by "+ me());						
-						// Go to a refuge
-						List<EntityID> path = search.breadthFirstSearch(
-								currentPosition, refuges);
-						sendMove(time, path);
-						amIGoingToRefuge = true;
-						return;
-
-					} else {
-						List<EntityID> path = search.breadthFirstSearch(
-								currentPosition,
-								victimForPreventiveClearing.getPosition());
-						log("Preventive Clearing: Going to Victim");						
-						sendMove(time, path);
-						return;
-					}
-				} else {
-					if (!refuges.contains(currentPosition)) {
-						List<EntityID> path = search.breadthFirstSearch(
-								currentPosition, refuges);
-						sendMove(time, path);
-						log("Preventive Clearing: Going to refuge");						
-						return;
-					} else {
-
-						log("Preventive Clearing: Finished for " + victimForPreventiveClearing);
-						if (!preventiveSavedVictims
-								.contains(victimForPreventiveClearing))
-							preventiveSavedVictims.add(victimForPreventiveClearing);						
-						amIGoingToRefuge = false;
-						target = null;
-						amIPreventiveClearing = false;
-					}
-				}
-
-			}
-		}
-		
+		if (enablePreventiveClearing)
+			if(treatPreventiveClearing())
+				return;
 
 		// Work on the task, if you have one
 		if (target != null) {
@@ -699,7 +629,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			path = getPathToEntranceTarget();
 		} else {
 			if (sector.getLocations().keySet().contains(currentPosition)) {
-				path = randomWalk(time);
+				path = randomWalk();
 				changeState(State.RANDOM_WALKING);
 			} else {
 				List<EntityID> local = new ArrayList<EntityID>(sector
@@ -713,6 +643,72 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			sendMove(time, path);
 			log("Path calculated and sent move: " + path);
 			return;
+		}
+	}
+
+	private boolean treatPreventiveClearing() {
+		boolean executouAcao = false;
+		StandardEntity victimForPreventiveClearing;
+		
+		if (amIPreventiveClearing && target != null) {
+			
+			victimForPreventiveClearing = model.getEntity(target);
+			log("Preventive Clearing: Started for " + victimForPreventiveClearing);
+			if (!amIGoingToRefuge) {
+				EntityID victimLoc = ((Human)victimForPreventiveClearing).getPosition();
+				if (!currentPosition.equals(victimLoc)) {
+					path = search.breadthFirstSearch(currentPosition, victimLoc);
+					log("Preventive Clearing: Going to Victim");						
+				} else {						
+					path = search.breadthFirstSearch(currentPosition, refuges);
+					log("Preventive Clearing: Arrived At Victim");
+					amIGoingToRefuge = true;
+				}
+				sendMove(currentTime, path);
+				executouAcao = true;
+			} else {
+				if (!refuges.contains(currentPosition)) {
+					path = search.breadthFirstSearch(currentPosition, refuges);
+					log("Preventive Clearing: Going to refuge");
+					sendMove(currentTime, path);						
+					executouAcao = true;
+				} else {
+					log("Preventive Clearing: Finished for " + victimForPreventiveClearing);
+					if (!preventiveSavedVictims.contains(victimForPreventiveClearing))
+						preventiveSavedVictims.add(victimForPreventiveClearing);						
+					amIGoingToRefuge = false;
+					target = null;
+					amIPreventiveClearing = false;
+				}
+			}
+
+		}
+		
+		return executouAcao;
+	}
+
+	private void movingToUnblock() {
+		Rectangle2D rect = ((Road) model.getEntity(path.get(0)))
+				.getShape().getBounds2D();
+		Random rdn = new Random();
+		int x = (int) (rect.getMinX() + rdn.nextDouble()
+				* (rect.getMaxX() - rect.getMinX()));
+		int y = (int) (rect.getMinY() + rdn.nextDouble()
+				* (rect.getMaxY() - rect.getMinY()));
+
+		if (rect.contains(x, y)) {
+			EntityID e = path.get(0);
+			path = new ArrayList<EntityID>();
+			path.add(e);
+			sendMove(currentTime, path, x, y);
+			changeState(State.MOVING_TO_UNBLOCK);
+			log("Found path: " + path + " and sent move to dest: " + x
+					+ "," + y);
+		} else {
+			path = randomWalk();
+			sendMove(currentTime, path);
+			changeState(State.RANDOM_WALKING);
+			log("Path calculated to unblock and sent move: " + path);
 		}
 	}
 
@@ -732,7 +728,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			changeState(State.MOVING_TO_ENTRANCE_BUILDING);
 		else {
 			changeState(State.RANDOM_WALKING);
-			path = randomWalk(currentTime);
+			path = randomWalk();
 		}
 		return path;
 	}
@@ -877,7 +873,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		lastTarget = target;
 	}
 
-	private List<EntityID> randomWalk(int time) {
+	protected List<EntityID> randomWalk() {
 		List<EntityID> result = new ArrayList<EntityID>();
 		EntityID current = ((Human) me()).getPosition();
 
@@ -890,7 +886,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 					possible.add(next);
 
 			Collections.shuffle(possible, new Random(me().getID().getValue()
-					+ time));
+					+ currentTime));
 			boolean found = false;
 
 			for (EntityID next : possible) {
@@ -975,28 +971,11 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			
 			//Se a tarefa for do tipo human, eh uma vitima para desbloqueio preventivo
 			if(taskEntity instanceof Human) {
-				if (enablePreventiveClearing) {
-					
-					Human humanEntity = (Human) taskEntity;
-					
-					//se o desbloqueio preventivo ainda nao foi feito para essa vitima
-					if (!preventiveSavedVictims.contains(humanEntity)) {
-						//se avitima encontra-se no meu setor
-						if (sector.getLocations().keySet()
-								.contains(humanEntity.getPosition())) {
-							if (!humanEntity.getID().equals(me().getID())
-									&& humanEntity.isBuriednessDefined()
-									&& humanEntity.getBuriedness() > 0) {								
-								result = next;
-								amIPreventiveClearing = true;
-								log("Selected task preventive clearing for "+humanEntity +" by "+me());
-								
-								//Escolheu a vitima para desbloqueio preventivo, sai do loop
-								break;
-							}
-						}
+				if (enablePreventiveClearing)
+					if (foundVictimToUnblock(taskEntity)) {
+						result = next;
+						break;
 					}
-				}
 			}			
 			else if(taskEntity instanceof Blockade) {
 				Blockade blockade = (Blockade) taskEntity;
@@ -1044,6 +1023,28 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		return result;
 	}
 
+	private boolean foundVictimToUnblock(StandardEntity taskEntity) {
+		Human humanEntity = (Human) taskEntity;
+		
+		//se o desbloqueio preventivo ainda nao foi feito para essa vitima
+		if (!preventiveSavedVictims.contains(taskEntity)) {
+			//se a vitima encontra-se no meu setor
+			if (sector.getLocations().keySet()
+					.contains(humanEntity.getPosition())) {
+				if (!humanEntity.getID().equals(me().getID())
+						&& humanEntity.isBuriednessDefined()
+						&& humanEntity.getBuriedness() > 0) {
+					amIPreventiveClearing = true;
+					log("Selected task preventive clearing for " + humanEntity);
+					
+					//Escolheu a vitima para desbloqueio preventivo, sai do loop
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	@Override
 	protected void refreshWorldModel(ChangeSet changed,
 			Collection<Command> heard) {
@@ -1058,30 +1059,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			model.removeEntity(obstructingBlockade);
 			obstructingBlockade = null;
 		}
-		
-		if (enablePreventiveClearing) {
-			// Se algum ambulanceTeam assumir a tarefa de resgatar um ferido
-			// Adicione a tarefa de realizar o desbloqueio preventivo no task table.
-			for (Command cmd : heard) {
-				if (cmd instanceof AKSpeak) {
-					Message speakMsg = new Message(((AKSpeak) cmd).getContent());
-					for (Parameter param : speakMsg.getParameters()) {
-						if (param.getOperation().equals(Operation.TASK_PICKUP)
-								&& param instanceof TaskPickup) {
-							if (model.getEntity(cmd.getAgentID()) instanceof AmbulanceTeam) {
-								TaskPickup task = (TaskPickup) param;
-								EntityID taskID = new EntityID(task.getTask());
-								StandardEntity taskEntity = model
-										.getEntity(taskID);
-								if (taskEntity != null && !taskTable.keySet().contains(taskID)) {
-									taskTable.put(taskID,new HashSet<EntityID>());
-								}
-							}
-						}						
-					}
-				}
-			}
-		}
 
 		super.refreshWorldModel(changed, heard);
 	}
@@ -1095,19 +1072,10 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		for (StandardEntity next : blockades)
 			remainingIDs.add(next.getID());
 		
-		if (enablePreventiveClearing) {
-			Set<StandardEntity> humans = new HashSet<StandardEntity>();
-			humans.addAll(model.getEntitiesOfType(StandardEntityURN.CIVILIAN,
-					StandardEntityURN.AMBULANCE_TEAM,
-					StandardEntityURN.POLICE_FORCE,
-					StandardEntityURN.FIRE_BRIGADE));
+		if (enablePreventiveClearing)
+			remainingIDs = addHumansPossiblyNotYetSaved(remainingIDs);
 
-			for (StandardEntity next : humans) {
-				remainingIDs.add(next.getID());
-			}
-		}
-
-		// Discard blockades that do not exist anymore
+		// Discard blockades and humans that do not exist anymore
 		taskTable.keySet().retainAll(remainingIDs);
 
 		// Add new blockades to the task table
@@ -1118,16 +1086,24 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			if (!taskTable.containsKey(blockID))
 				taskTable.put(blockID, new HashSet<EntityID>());
 		}
+	}
+
+	private Set<EntityID> addHumansPossiblyNotYetSaved(Set<EntityID> remainingIDs) {
+		Set<StandardEntity> humans = new HashSet<StandardEntity>();
+		humans.addAll(model.getEntitiesOfType(
+				StandardEntityURN.CIVILIAN,
+				StandardEntityURN.AMBULANCE_TEAM,
+				StandardEntityURN.POLICE_FORCE,
+				StandardEntityURN.FIRE_BRIGADE
+		));
+
+		// Descarta as vitimas para quem ja foi feito o desbloqueio preventivo
+		humans.removeAll(preventiveSavedVictims);
 		
+		for (StandardEntity next : humans)
+			remainingIDs.add(next.getID());
 		
-		if (enablePreventiveClearing) {
-			// Descarta as vitimas para quem ja foi feito o desbloqueio preventivo
-			for (Human preventedVictim : preventiveSavedVictims) {
-				if (taskTable.keySet().contains(preventedVictim.getID())) {
-					taskTable.keySet().remove(preventedVictim.getID());					
-				}
-			}
-		}
+		return remainingIDs;
 	}
 
 	@Override
@@ -1170,7 +1146,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		ss.add(State.RANDOM_WALKING);
 		ss.add(State.MOVING_TO_UNBLOCK);
 
-		return ss.contains(state) || amIPreventiveClearing;
+		return ss.contains(state);
 	}
 
 	private void changeState(State state) {
