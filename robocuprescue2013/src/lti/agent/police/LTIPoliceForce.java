@@ -718,13 +718,13 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		if (buildingEntranceTarget == null) {
 			path = search.breadthFirstSearch(currentPosition,
 					buildingEntrancesToBeCleared);
-			if (path.size() > 0)
+			if (path != null && path.size() > 0)
 				buildingEntranceTarget = path.get(path.size() - 1);
 		} else {
 			path = search.breadthFirstSearch(currentPosition,
 					buildingEntranceTarget);
 		}
-		if (path.size() > 0)
+		if (path != null && path.size() > 0)
 			changeState(State.MOVING_TO_ENTRANCE_BUILDING);
 		else {
 			changeState(State.RANDOM_WALKING);
@@ -961,8 +961,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		EntityID result = null;
 		double Pb = Double.NEGATIVE_INFINITY;
 
-		double thisDistance, repairCost, importance;
-		boolean samePosition, isPositionEntrance, isInSector;
+		double importance;
 
 		log("taskTable: " + taskTable);
 		for (EntityID next : taskTable.keySet()) {
@@ -978,32 +977,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 					}
 			}			
 			else if(taskEntity instanceof Blockade) {
-				Blockade blockade = (Blockade) taskEntity;
-
-				thisDistance = model.getDistance(getID(), blockade.getID());
-				repairCost = blockade.getRepairCost();
-	
-				EntityID pos = blockade.getPosition();
-				samePosition = (pos == currentPosition);
-				isPositionEntrance = false;
-				if (model.getEntity(pos) instanceof Road) {
-					Road areaEntity = (Road) model.getEntity(pos);
-					for (EntityID e : areaEntity.getNeighbours())
-						if (model.getEntity(e) instanceof Building) {
-							isPositionEntrance = true;
-							break;
-						}
-				}
+				importance = calculateImportanceTask(taskEntity);
 				
-				isInSector = sector.getLocations().keySet().contains(pos);
-				
-				importance = repairCost;
-				importance -= thisDistance / 500;
-				importance += isPositionEntrance ? 4 * repairRate : 0;
-				importance += samePosition ? repairRate : 0;
-				importance += samePosition && isPositionEntrance ? 10 * repairRate : 0;
-				importance += isInSector ? repairRate / 2 : 0;
-	
 				if (importance > Pb) {
 					result = next;
 					Pb = importance;
@@ -1021,6 +996,38 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		}
 
 		return result;
+	}
+
+	private double calculateImportanceTask(StandardEntity taskEntity) {
+		double thisDistance, repairCost, importance;
+		boolean samePosition, isPositionEntrance, isInSector;
+		Blockade blockade = (Blockade) taskEntity;
+
+		thisDistance = model.getDistance(getID(), blockade.getID());
+		repairCost = blockade.getRepairCost();
+
+		EntityID pos = blockade.getPosition();
+		samePosition = (pos == currentPosition);
+		isPositionEntrance = false;
+		if (model.getEntity(pos) instanceof Road) {
+			Road areaEntity = (Road) model.getEntity(pos);
+			for (EntityID e : areaEntity.getNeighbours())
+				if (model.getEntity(e) instanceof Building) {
+					isPositionEntrance = true;
+					break;
+				}
+		}
+		
+		isInSector = sector.getLocations().keySet().contains(pos);
+		
+		importance = repairCost;
+		importance -= thisDistance / 500;
+		importance += isPositionEntrance ? 4 * repairRate : 0;
+		importance += samePosition ? repairRate : 0;
+		importance += samePosition && isPositionEntrance ? 10 * repairRate : 0;
+		importance += isInSector ? repairRate / 2 : 0;
+		
+		return importance;
 	}
 
 	private boolean foundVictimToUnblock(StandardEntity taskEntity) {
