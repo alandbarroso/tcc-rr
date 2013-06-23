@@ -272,10 +272,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 				taskTable.get(victim.getID()).add(me().getID());
 
-				// System.out.println("TASK SELECTED  by " + me().getID() +
-				// " = "
-				// + victim.getFullDescription());
-
 				return victim.getID();
 			}
 		}
@@ -313,12 +309,12 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 								finalDistance = distanceFromAT
 										+ distanceToRefuge;
 								result = victim;
-								System.out.println("Going to save victim "+ victim +" by "+me().getID());
+								log("Going to save victim "+ victim);
 							} else {
-								System.out.println("Not possible to save victim "+ victim +" by "+me().getID());
+								log("Not possible to save victim "+ victim);
 							}
 						} else {
-							System.out.println("Victim already being rescued, picking another one "+ victim +" by "+me().getID());
+							log("Victim already being rescued, picking another one "+ victim);
 						}
 
 					}
