@@ -223,6 +223,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			} else if (model.getEntity(target) instanceof Human) {
 				if (workedOnTargetVictim())
 					return;
+			} else if (model.getEntity(target) instanceof Building) {
+				if (workedOnTargetBuilding())
+					return;
 			}
 		}
 
@@ -238,6 +241,30 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			log("Path calculated and sent move: " + path);
 			return;
 		}
+	}
+
+	private boolean workedOnTargetBuilding() {
+		Building areaEntity = (Building) model.getEntity(target);
+		List<EntityID> closestRoadIds = new ArrayList<EntityID>();
+		for (EntityID e : areaEntity.getNeighbours())
+			if (model.getEntity(e) instanceof Road &&
+					!buildingEntrancesCleared.contains(e))
+				closestRoadIds.add(e);
+		if (closestRoadIds.size() > 0) {
+			path = getPathToTarget(closestRoadIds);
+		
+			if (path != null && path.size() > 0) {
+				StandardEntity e = model.getEntity(path.get(path.size()-1));
+				if (e instanceof Road) {
+					Edge edge = areaEntity.getEdgeTo(e.getID());
+					int x = (edge.getStartX()+edge.getEndX())/2;
+					int y = (edge.getStartY()+edge.getEndY())/2;
+					moveToTarget(x, y);
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private boolean workedOnTargetVictim() {
@@ -687,6 +714,14 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				if (buildingEntrancesCleared.containsAll(areaEntity.getNeighbours()))
 					return 0;
 			}
+		} else if (taskEntity instanceof Building) {
+			Building b = (Building) taskEntity;
+			benefit = 6 * repairRate;
+			pos = b.getID();
+			isImportantPosition = true;
+			// Evaluate as 0 those which are already cleared
+			if (buildingEntrancesCleared.containsAll(b.getNeighbours()))
+				return 0;
 		}
 		
 		thisDistance = model.getDistance(getID(), taskEntity.getID());
@@ -750,6 +785,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		
 		Set<StandardEntity> blockades = addBlockades(remainingIDs);
 		remainingIDs.addAll(knownVictims);
+		remainingIDs.addAll(refuges);
 		
 		// Descarta as vitimas para quem ja foi feito o desbloqueio preventivo
 		if (enablePreventiveClearing) {
@@ -774,6 +810,11 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		for (EntityID victimID : knownVictims)
 			if (!taskTable.containsKey(victimID))
 				taskTable.put(victimID, new HashSet<EntityID>());
+		
+		// Add new refuges to the task table
+		for (EntityID ref : refuges)
+			if (!taskTable.containsKey(ref))
+				taskTable.put(ref, new HashSet<EntityID>());
 	}
 
 	private Set<StandardEntity> addBlockades(Set<EntityID> remainingIDs) {
