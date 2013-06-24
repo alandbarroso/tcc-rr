@@ -236,10 +236,16 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	private void chooseAndSubscribeToRadioChannels() {
 		channelList = new ArrayList<Pair<Integer, Integer>>();
 		List<Pair<Integer, Integer>> auxList = new ArrayList<Pair<Integer, Integer>>();
+		int nAgents = model.getEntitiesOfType(
+				StandardEntityURN.AMBULANCE_TEAM,
+				StandardEntityURN.POLICE_FORCE,
+				StandardEntityURN.FIRE_BRIGADE).size();
+		
 		for (int i = 0; i < numChannels; i++) {
 			if (config.getValue(PREFIX_CHANNELS + i + ".type").equalsIgnoreCase("radio")) {
 				int bandwidth = config.getIntValue(PREFIX_CHANNELS + i + ".bandwidth");
-				auxList.add(new Pair<Integer, Integer>(i, bandwidth));
+				int bandwidthPerAgent = (int) (bandwidth / (nAgents * 0.7));
+				auxList.add(new Pair<Integer, Integer>(i, bandwidthPerAgent));
 			} else {
 				int size = config.getIntValue(PREFIX_CHANNELS + i + ".messages.size");
 				channelList.add(new Pair<Integer, Integer>(i, size));
@@ -398,8 +404,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	private void readMsg(ChangeSet changed, Command cmd) {
 		Message speakMsg;
 		speakMsg = new Message(((AKSpeak) cmd).getContent());
-		log("Speak from:" + cmd.getAgentID() + " channel:" +
-				((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
+		//log("Speak from:" + cmd.getAgentID() + " channel:" +
+		//		((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
 		for (Parameter param : speakMsg.getParameters()) {
 			switch (param.getOperation()) {
 			case FIRE:
@@ -852,9 +858,12 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		}
 	}
 
-	/** Compõe uma mensagem para ser enviada de acordo com o que o agente vê */
 	protected Message composeMessage(ChangeSet changed) {
-		Message message = new Message();
+		return composeMessage(changed, new Message());
+	}
+	
+	/** Compõe uma mensagem para ser enviada de acordo com o que o agente vê */
+	protected Message composeMessage(ChangeSet changed, Message message) {
 
 		for (EntityID buildingID : getVisibleEntitiesOfType(
 				StandardEntityURN.BUILDING, changed)) {
