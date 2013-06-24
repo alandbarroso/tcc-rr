@@ -404,8 +404,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	private void readMsg(ChangeSet changed, Command cmd) {
 		Message speakMsg;
 		speakMsg = new Message(((AKSpeak) cmd).getContent());
-		log("Speak from:" + cmd.getAgentID() + " channel:" +
-				((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
+		//log("Speak from:" + cmd.getAgentID() + " channel:" +
+		//		((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
 		for (Parameter param : speakMsg.getParameters()) {
 			switch (param.getOperation()) {
 			case FIRE:
@@ -858,9 +858,12 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		}
 	}
 
-	/** Compõe uma mensagem para ser enviada de acordo com o que o agente vê */
 	protected Message composeMessage(ChangeSet changed) {
-		Message message = new Message();
+		return composeMessage(changed, new Message());
+	}
+	
+	/** Compõe uma mensagem para ser enviada de acordo com o que o agente vê */
+	protected Message composeMessage(ChangeSet changed, Message message) {
 
 		for (EntityID buildingID : getVisibleEntitiesOfType(
 				StandardEntityURN.BUILDING, changed)) {
