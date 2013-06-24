@@ -24,9 +24,7 @@ import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.Civilian;
-import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.Human;
-import rescuecore2.standard.entities.PoliceForce;
 import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.Road;
 import rescuecore2.standard.entities.StandardEntity;
@@ -37,17 +35,9 @@ import area.Sector;
 import area.Sectorization;
 
 public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
-	
-	
-	private static int POLICE_FORCE_RESCUE_PRIORITY = 2;
-	private static int FIRE_BRIGADE_RESCUE_PRIORITY = 4;
-	private static int CIVILIAN_RESCUE_PRIORITY = 3;
-	private static int AMBULANCE_TEAM_RESCUE_PRIORITY = 1;
-
 	private Set<EntityID> buildingsToCheck;
 
 	private List<EntityID> refuges;
-	
 
 	private static enum State {
 		CARRYING_CIVILIAN, PATROLLING, TAKING_ALTERNATE_ROUTE,
@@ -88,17 +78,15 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		for (Refuge next : ref) {
 			refuges.add(next.getID());
 		}
-
 		
 		safeBuildings = new HashSet<EntityID>();
 			
 		sectorize();
 		
 		buildingsToCheck = new HashSet<EntityID>();
-		for(EntityID buildingID:buildingIDs){
+		for(EntityID buildingID:buildingIDs)
 			if(sector.getLocations().keySet().contains(buildingID))
 				buildingsToCheck.add(buildingID);
-		}
 		
 		buildingsToCheck.removeAll(refuges);
 
@@ -215,24 +203,20 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		getSafeBuildings();
 		
-		// Using an aux list of buildings to check
+		// Using an auxiliar list of buildings to check
 		Set<EntityID> auxBuildingsToCheck = new HashSet<EntityID>(buildingsToCheck);
 		
 		// We remove all the buildings that aren't safe to enter
 		auxBuildingsToCheck.retainAll(safeBuildings);
 		
-		for(EntityID bd : auxBuildingsToCheck){
-			if(model.getEntity(bd) instanceof Building){
-				Building b = (Building) model.getEntity(bd);
-				
-				if(b.isFierynessDefined()){
-					log("Building(" + bd + "): PROPERTY - Fieryness: " + b.getFieryness());
-				}
-				
-				if(b.isBrokennessDefined()){
-					log("Building(" + bd + "): PROPERTY - Brokenness: " + b.getBrokenness());
-				}
-			}
+		// We then try to go to the closest building not yet checked
+		path = search.breadthFirstSearch(me().getPosition(), auxBuildingsToCheck);
+		
+		// If we find a path, we set it as the next location
+		if(path != null){
+			sendMove(time, path);
+			changeState(State.PATROLLING);
+			return;
 		}
 		
 		// We then try to go to the closest building not yet checked
@@ -369,7 +353,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 				int distanceFromAT = model.getDistance(currentPosition,
 						victim.getPosition());
 				
-//				int distanceToRefuge = getDistanceToClosestRefuge(victim);
 				int distanceToRefuge = 0;
 				
 				totalDistance= distanceToRefuge + distanceFromAT;
@@ -407,22 +390,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		return  taskTable.keySet().contains(victim.getID()) && !taskTable.get(victim.getID()).isEmpty();		
 		
 	}
-	
-	private int getDistanceToClosestRefuge(Human victim){
-		
-		int distanceToRefuge = Integer.MAX_VALUE;
-
-		for (EntityID ref : refuges) {
-			int dist = model.getDistance(victim.getPosition(), ref);
-			if (dist < distanceToRefuge) {
-				distanceToRefuge = dist;
-			}
-		}
-		
-		return distanceToRefuge;
-		
-	}
-	
 
 	private Boolean isSavable(Human victim, int totalDistance) {
 
@@ -457,38 +424,29 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		return savability;
 	}
 
-	private int getSquadPriority(Human victim) {
-		if (victim instanceof Civilian)
-			return CIVILIAN_RESCUE_PRIORITY;
-		else if (victim instanceof AmbulanceTeam)
-			return AMBULANCE_TEAM_RESCUE_PRIORITY;
-		else if (victim instanceof PoliceForce)
-			return POLICE_FORCE_RESCUE_PRIORITY;
-		else if (victim instanceof FireBrigade)
-			return FIRE_BRIGADE_RESCUE_PRIORITY;
-		else
-			return 0;
-	}
-
 	@Override
 	protected void refreshTaskTable(ChangeSet changed) {
 		Set<EntityID> victims = new HashSet<EntityID>();
-		StandardEntityURN[] urns = { StandardEntityURN.AMBULANCE_TEAM,
-				StandardEntityURN.FIRE_BRIGADE, StandardEntityURN.CIVILIAN,
-				StandardEntityURN.POLICE_FORCE };
+		List<StandardEntityURN> urns = new ArrayList<StandardEntityURN>();
+		
+		urns.add(StandardEntityURN.AMBULANCE_TEAM);
+		urns.add(StandardEntityURN.FIRE_BRIGADE);
+		urns.add(StandardEntityURN.CIVILIAN);
+		urns.add(StandardEntityURN.POLICE_FORCE);
+		
 		/*
 		 * Victims: - AT, FB and PF who are alive and buried; - Civilians who
 		 * are alive and are either buried or inside a building that is not a
 		 * refuge.
 		 */
-		for (int i = 0; i < 4; i++) {
+		for (StandardEntityURN entUrn : urns) {
 			Set<EntityID> nonRefugeBuildings = new HashSet<EntityID>(
 					buildingIDs);
 			nonRefugeBuildings.removeAll(refuges);
 
-			for (StandardEntity next : model.getEntitiesOfType(urns[i])) {
+			for (StandardEntity next : model.getEntitiesOfType(entUrn)) {
 				if (((Human) next).isHPDefined() && ((Human) next).getHP() != 0) {
-					if (urns[i].equals(StandardEntityURN.CIVILIAN)
+					if (entUrn.equals(StandardEntityURN.CIVILIAN)
 							&& nonRefugeBuildings.contains(((Human) next)
 									.getPosition())) {
 						victims.add(next.getID());
