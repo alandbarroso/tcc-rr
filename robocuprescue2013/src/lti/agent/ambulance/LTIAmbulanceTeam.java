@@ -194,11 +194,25 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		getSafeBuildings();
 		
-		// Using an auxiliar list of buildings to check
+		// Using an aux list of buildings to check
 		Set<EntityID> auxBuildingsToCheck = new HashSet<EntityID>(buildingsToCheck);
 		
 		// We remove all the buildings that aren't safe to enter
 		auxBuildingsToCheck.retainAll(safeBuildings);
+		
+		for(EntityID bd : auxBuildingsToCheck){
+			if(model.getEntity(bd) instanceof Building){
+				Building b = (Building) model.getEntity(bd);
+				
+				if(b.isFierynessDefined()){
+					log("Building(" + bd + "): PROPERTY - Fieryness: " + b.getFieryness());
+				}
+				
+				if(b.isBrokennessDefined()){
+					log("Building(" + bd + "): PROPERTY - Brokenness: " + b.getBrokenness());
+				}
+			}
+		}
 		
 		// We then try to go to the closest building not yet checked
 		path = search.breadthFirstSearch(me().getPosition(), auxBuildingsToCheck);
@@ -448,6 +462,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		for (StandardEntity next : model
 				.getEntitiesOfType(StandardEntityURN.BUILDING)) {
 			if (!((Building) next).isOnFire()) {
+				if(!((Building) next).isBrokennessDefined())
 				safe.add(next.getID());
 			}
 		}
