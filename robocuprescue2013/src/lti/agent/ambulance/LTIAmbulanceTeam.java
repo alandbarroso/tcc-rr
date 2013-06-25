@@ -35,6 +35,7 @@ import area.Sector;
 import area.Sectorization;
 
 public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
+
 	private Set<EntityID> buildingsToCheck;
 
 	private List<EntityID> refuges;
@@ -208,30 +209,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		
 		// We remove all the buildings that aren't safe to enter
 		auxBuildingsToCheck.retainAll(safeBuildings);
-		
-		// We then try to go to the closest building not yet checked
-		path = search.breadthFirstSearch(me().getPosition(), auxBuildingsToCheck);
-		
-		// If we find a path, we set it as the next location
-		if(path != null){
-			sendMove(time, path);
-			changeState(State.PATROLLING);
-			return;
-		}
-		
-		for(EntityID bd : auxBuildingsToCheck){
-			if(model.getEntity(bd) instanceof Building){
-				Building b = (Building) model.getEntity(bd);
-				
-				if(b.isFierynessDefined()){
-					log("Building(" + bd + "): PROPERTY - Fieryness: " + b.getFieryness());
-				}
-				
-				if(b.isBrokennessDefined()){
-					log("Building(" + bd + "): PROPERTY - Brokenness: " + b.getBrokenness());
-				}
-			}
-		}
 		
 		// We then try to go to the closest building not yet checked
 		path = search.breadthFirstSearch(me().getPosition(), auxBuildingsToCheck);
