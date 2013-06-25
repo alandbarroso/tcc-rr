@@ -13,10 +13,13 @@ import lti.message.Message;
 import lti.utils.EntityIDComparator;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
+import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Building;
+import rescuecore2.standard.entities.Civilian;
 import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.GasStation;
 import rescuecore2.standard.entities.Hydrant;
+import rescuecore2.standard.entities.PoliceOffice;
 import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityURN;
@@ -34,7 +37,9 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private int maxPower;
 	private List<EntityID> refuges;
 	private List<EntityID> fireBrigadesList;
-	private List<EntityID> gasStationNeighbours;
+	
+	private Set<EntityID> gasStationNeighbours;
+	private int dangerousDistance;
 
 	private static enum State {
 		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, 
@@ -75,6 +80,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		for (Refuge r : ref) {
 			refuges.add(r.getID());
 		}
+		
+		dangerousDistance = 25000;
 		
 		gasStationNeighbours = calculateGasStationNeighbours();
 		
@@ -371,6 +378,64 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 		return result;
 	}
+	
+	private double getBuildingPriority(EntityID building){
+		int distanceToBuilding; // The distace to the target
+		int nbSafeNeighbours = 0; // The number of neighbours that haven't start burning
+		boolean presenceOfCivilians = false;
+		boolean presenceOfAgents = false;
+		boolean closeToGas = false;
+		boolean nearGas = false;
+		
+		double result;
+		
+		Collection<StandardEntity> buildings = model.getEntitiesOfType(StandardEntityURN.BUILDING);
+		Collection<StandardEntity> people = model.getEntitiesOfType(StandardEntityURN.AMBULANCE_TEAM,
+																StandardEntityURN.FIRE_BRIGADE,
+																StandardEntityURN.POLICE_FORCE,
+																StandardEntityURN.CIVILIAN);
+		
+		distanceToBuilding = model.getDistance(me().getID(), building);
+		
+		for(StandardEntity bd : buildings){
+			if(bd instanceof Building){
+				// If it is in a dangerous distance, that may allow the fire to spread
+				// And it's not on fire then give high priority
+				if(model.getDistance(building, bd.getID()) < dangerousDistance && !((Building) bd).isOnFire()){
+						nbSafeNeighbours++;
+				}
+				if(gasStationNeighbours.contains(bd.getID())){
+					closeToGas = true;
+				}
+			}
+		}
+		
+		for(StandardEntity person : people){
+			// We check if it's a Ambulance, Fire Brigade or Police Force
+			if(person instanceof AmbulanceTeam || person instanceof FireBrigade || person instanceof PoliceOffice){
+				presenceOfAgents = true;
+			}
+			// We check if there are civilians in the building
+			if(person instanceof Civilian){
+				presenceOfCivilians = true;
+			}
+		}
+		
+		if(gasStationNeighbours.contains(building)){
+			nearGas = true;
+		}
+		
+		result = 0;
+		if (distanceToBuilding >= 0)
+			result -= distanceToBuilding / maxPower;
+		result += nbSafeNeighbours/2*maxPower;
+		result += closeToGas ? 3*maxPower : 0;
+		result += nearGas ? 5*maxPower : 0;
+		result += presenceOfAgents ? 2*maxPower : 0;
+		result += presenceOfCivilians ? maxPower : 0;
+		
+		return result;
+	}
 
 	@Override
 	protected void dropTask(int time, ChangeSet changed) {
@@ -402,8 +467,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	}
 	
 	// Used to calculate all the buildings near gas stations
-	private List<EntityID> calculateGasStationNeighbours(){
-		List<EntityID> result = new ArrayList<EntityID>();
+	private Set<EntityID> calculateGasStationNeighbours(){
+		Set<EntityID> result = new HashSet<EntityID>();
 		
 		Collection<StandardEntity> gasStations = model.
 				getEntitiesOfType(StandardEntityURN.GAS_STATION); // Getting the list of Gas Stations
@@ -416,7 +481,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 				for(StandardEntity bd : buildings){
 					if(bd instanceof Building){
 						log("Building " + bd.getID() + " distance to gas: " + model.getDistance(gs.getID(), bd.getID()));
-						if(model.getDistance(gs.getID(), bd.getID()) < 25000){
+						if(model.getDistance(gs.getID(), bd.getID()) < dangerousDistance){
 							log("Close building! Adding " + bd.getID() + " to neighbours!");
 							result.add(bd.getID());
 						}
