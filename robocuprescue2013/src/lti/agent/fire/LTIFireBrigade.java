@@ -19,6 +19,7 @@ import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.Civilian;
 import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.GasStation;
+import rescuecore2.standard.entities.Human;
 import rescuecore2.standard.entities.Hydrant;
 import rescuecore2.standard.entities.PoliceOffice;
 import rescuecore2.standard.entities.Refuge;
@@ -40,7 +41,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private int maxPower;
 	private List<EntityID> refuges;
 	private List<EntityID> fireBrigadesList;
-	
+	private List<EntityID> gasStationList;
 	private Set<EntityID> gasStationNeighbours;
 	private int dangerousDistance;
 	
@@ -87,6 +88,10 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		}
 		
 		dangerousDistance = 25000;
+		
+		gasStationList = new ArrayList<EntityID>();
+		for(StandardEntity next : model.getEntitiesOfType(StandardEntityURN.GAS_STATION))
+			gasStationList.add(next.getID());
 		
 		gasStationNeighbours = calculateGasStationNeighbours();
 		
@@ -329,7 +334,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		Set<EntityID> fires = new HashSet<EntityID>();
 
 		for (StandardEntity next : model
-				.getEntitiesOfType(StandardEntityURN.BUILDING)) {
+				.getEntitiesOfType(StandardEntityURN.BUILDING, StandardEntityURN.GAS_STATION)) {
 			if (((Building) next).isOnFire()) {
 				fires.add(next.getID());
 			}
@@ -384,6 +389,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		boolean presenceOfAgents = false;
 		boolean closeToGas = false;
 		boolean nearGas = false;
+		boolean isGasStation = false;
 		
 		double result;
 		
@@ -409,13 +415,16 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		}
 		
 		for(StandardEntity person : people){
-			// We check if it's a Ambulance, Fire Brigade or Police Force
-			if(person instanceof AmbulanceTeam || person instanceof FireBrigade || person instanceof PoliceOffice){
-				presenceOfAgents = true;
-			}
-			// We check if there are civilians in the building
-			if(person instanceof Civilian){
-				presenceOfCivilians = true;
+			// We get only buildings that have alive humans
+			if(((Human) person).isHPDefined() && ((Human) person).getHP() > 0){
+				// We check if it's a Ambulance, Fire Brigade or Police Force
+				if(person instanceof AmbulanceTeam || person instanceof FireBrigade || person instanceof PoliceOffice){
+					presenceOfAgents = true;
+				}
+				// We check if there are civilians in the building
+				if(person instanceof Civilian){
+					presenceOfCivilians = true;
+				}
 			}
 		}
 		
@@ -423,13 +432,18 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			nearGas = true;
 		}
 		
+		if(gasStationList.contains(building)){
+			isGasStation = true;
+		}
+		
 		result = 0;
 		if (distanceToBuilding >= 0){
-			result -= distanceToBuilding / maxPower;
+			result -= distanceToBuilding/maxDistance*maxPower;
 		}
 		result += nbSafeNeighbours/2*maxPower;
 		result += closeToGas ? 3*maxPower : 0;
 		result += nearGas ? 5*maxPower : 0;
+		result += isGasStation ? 10*maxPower : 0;
 		result += presenceOfAgents ? 2*maxPower : 0;
 		result += presenceOfCivilians ? maxPower : 0;
 		if(((Building) model.getEntity(building)).isFierynessDefined()){
