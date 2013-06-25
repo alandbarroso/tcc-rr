@@ -93,12 +93,6 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	// Maximum channels for Centre
 	protected int maxChannelCentre;
 
-	// Receive channel number
-	protected int receiveChannel;
-
-	// Send channel number
-	protected int sendChannel;
-
 	protected List<Pair<Integer, Integer>> channelList;
 
 	protected EntityID lastPosition;
@@ -129,8 +123,6 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 
 	// Vítimas já conhecidas
 	protected Set<EntityID> knownVictims;
-
-	protected boolean blocked;
 
 	protected EntityID taskDropped;
 	
@@ -178,9 +170,6 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 
 		this.maxChannelPlatoon = this.config.getIntValue(MAX_CHANNEL_PLATOON);
 		this.maxChannelCentre = this.config.getIntValue(MAX_CHANNEL_CENTRE);
-
-		this.receiveChannel = 0;
-		this.sendChannel = 0;
 
 		channelList = new ArrayList<Pair<Integer, Integer>>();
 

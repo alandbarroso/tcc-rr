@@ -537,9 +537,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		return msg;
 	}
 
-	/**
-	 * 
-	 */
 	private void recalculaVariaveisCiclo() {
 		currentX = me().getX();
 		currentY = me().getY();
