@@ -52,9 +52,6 @@ import rescuecore2.worldmodel.EntityID;
 
 public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		StandardAgent<E> {
-
-	//TODO: For the competition, set to false
-	protected static final boolean VERBOSE = true;
 	
 	protected static final int RANDOM_WALK_LENGTH = 5;
 
@@ -71,6 +68,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 
 	private static final String MAX_CHANNEL_CENTRE = PREFIX_CHANNELS + "max.centre";
 
+	protected boolean verbose = false;
+	
 	protected Search search;
 
 	protected Set<EntityID> buildingIDs;
@@ -1062,8 +1061,12 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		return new EntityID(0);
 	}
 	
+	public void setVerbose(boolean verbose) {
+		this.verbose = verbose;
+	}
+	
 	protected void log(String s) {
-		if (VERBOSE) {
+		if (this.verbose) {
 			String[] type_agent = me().getURN().split(":");
 
 			String msg_erro =
