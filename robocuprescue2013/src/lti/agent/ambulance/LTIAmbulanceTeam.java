@@ -8,11 +8,10 @@ package lti.agent.ambulance;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -32,14 +31,16 @@ import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityURN;
 import rescuecore2.worldmodel.ChangeSet;
 import rescuecore2.worldmodel.EntityID;
+import area.Sector;
+import area.Sectorization;
 
 public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	
 	
-	private static int POLICE_FORCE_RESCUE_PRIORITY = 3;
+	private static int POLICE_FORCE_RESCUE_PRIORITY = 2;
 	private static int FIRE_BRIGADE_RESCUE_PRIORITY = 4;
-	private static int CIVILIAN_RESCUE_PRIORITY = 1;
-	private static int AMBULANCE_TEAM_RESCUE_PRIORITY = 2;
+	private static int CIVILIAN_RESCUE_PRIORITY = 3;
+	private static int AMBULANCE_TEAM_RESCUE_PRIORITY = 1;
 
 	private List<EntityID> buildingsToCheck;
 
@@ -56,6 +57,10 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	private Set<EntityID> safeBuildings;
 	
 	private List<EntityID> ambulanceTeamsList;
+	
+	private Sectorization sectorization;
+	
+	private Sector sector;
 
 	@Override
 	protected void postConnect() {
@@ -82,15 +87,20 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 			refuges.add(next.getID());
 		}
 
-		buildingsToCheck = new ArrayList<EntityID>();
-
-		for (EntityID next : buildingIDs) {
-			if (!refuges.contains(next)) {
-				buildingsToCheck.add(next);
-			}
-		}
-
+		
 		safeBuildings = new HashSet<EntityID>();
+			
+		sectorize();
+		
+		buildingsToCheck = new ArrayList<EntityID>();
+		for(EntityID buildingID:buildingIDs){
+			if(sector.getLocations().keySet().contains(buildingID))
+				buildingsToCheck.add(buildingID);
+		}
+		
+		buildingsToCheck.removeAll(refuges);
+		
+		Collections.shuffle(buildingsToCheck);
 
 		changeState(State.RANDOM_WALKING);
 	}
@@ -281,11 +291,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 				}
 
 				taskTable.get(victim.getID()).add(me().getID());
-
-				// System.out.println("TASK SELECTED  by " + me().getID() +
-				// " = "
-				// + victim.getFullDescription());
-
 				return victim.getID();
 			}
 		}
@@ -295,7 +300,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	
 	
 	private Human pickVictim() {
-		int finalDistance = Integer.MAX_VALUE;
+		int totalDistance = 0;
+		double savePriority = 0, newSavePriority;
 		Human result = null;
 
 		for (EntityID next : taskTable.keySet()) {
@@ -303,72 +309,17 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 				Human victim = (Human) model.getEntity(next);
 				int distanceFromAT = model.getDistance(currentPosition,
 						victim.getPosition());
-				int distanceToRefuge = Integer.MAX_VALUE;
-
-				for (EntityID ref : refuges) {
-					int dist = model.getDistance(victim.getPosition(), ref);
-					if (dist < distanceToRefuge) {
-						distanceToRefuge = dist;
-					}
-				}
-
-				//TODO:Update final code
-				if (victim.getID() != taskDropped) {
-					if (distanceFromAT + distanceToRefuge < finalDistance) {
-						// Se nao ha nenhuma outra entidade salvando a vitima
-						if (taskTable.keySet().contains(victim.getID())
-								&& taskTable.get(victim.getID()).isEmpty()) {
-							if (isSavable(victim, distanceFromAT
-									+ distanceToRefuge)) {
-								finalDistance = distanceFromAT
-										+ distanceToRefuge;
-								result = victim;
-								log("Going to save victim "+ victim);
-							} else {
-								log("Not possible to save victim "+ victim);
-							}
-						} else {
-							log("Victim already being rescued, picking another one "+ victim);
-						}
-
-					}
-				}
-			}
-		}
-
-		return result;
-	}
-
-
-	/**
-	 * Choose the victim with the best chance of being succesfully rescued.
-	 * 
-	 * @param victims
-	 *            A map containing the victims and the ambulances engaged in
-	 *            rescueing each one.
-	 * @return The Human entity to be rescued.
-	 */
-	private Human pickVictim(Map<EntityID, Set<EntityID>> victims) {
-		int finalDistance = Integer.MAX_VALUE;
-		Human result = null;
-
-		for (EntityID next : victims.keySet()) {
-			if (!next.equals(taskDropped)) {
-				Human victim = (Human) model.getEntity(next);
-				int distanceFromAT = model.getDistance(currentPosition,
-						victim.getPosition());
-				int distanceToRefuge = Integer.MAX_VALUE;
-
-				for (EntityID ref : refuges) {
-					int dist = model.getDistance(victim.getPosition(), ref);
-					if (dist < distanceToRefuge) {
-						distanceToRefuge = dist;
-					}
-				}
-
-				if (distanceFromAT + distanceToRefuge < finalDistance) {
-					finalDistance = distanceFromAT + distanceToRefuge;
-					result = victim;
+				
+//				int distanceToRefuge = getDistanceToClosestRefuge(victim);
+				int distanceToRefuge = 0;
+				
+				totalDistance= distanceToRefuge + distanceFromAT;
+				if(evaluateSavingConditions(victim, totalDistance)){
+						newSavePriority = getVictimSavePriority(victim, totalDistance);
+						if(newSavePriority>savePriority){
+							result = victim;
+							savePriority = newSavePriority;
+						}							
 				}
 			}
 		}
@@ -376,58 +327,96 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		return result;
 	}
 	
+	private Boolean evaluateSavingConditions(Human victim, int totalDistance){
+		
+		//Se a vitima nao estiver em um refugio
+		if(!(victim.isPositionDefined() && refuges.contains(victim.getPosition()))){
+			//se a vitima ainda nao estiver sendo salva
+			if(!isVictimBeingRescued(victim)){
+				//Se ainda e possivel salvar a vitima
+				if (isSavable(victim, totalDistance)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 	
-	//TODO:Update final code
-		private Boolean isSavable(Human victim, int totalDistance){
-			
-			//Calcula quantos ciclos a vitima tem de vida
-			int remainingCycles = 0;
-			if(victim.isDamageDefined() && victim.getDamage()!=0)
-				remainingCycles = victim.getHP()/victim.getDamage();
-			else
-				return Boolean.TRUE;
-			
-			//Calcula quantos ciclos precisa para salvar a vitima
-			//TODO: considerar tempo de rescue e load
-			int necessaryCycles = 0;
+	
+	private Boolean isVictimBeingRescued(Human victim){
+		
+//		for(EntityID ambulanceID : ambulanceTeamsList){
+//			if(!ambulanceID.equals(me().getID())){
+//				Human ambulance = (Human)model.getEntity(ambulanceID);
+//				if(victim.getPosition().equals(ambulance.getPosition())){
+//	//				if(taskTable.keySet().contains(victim.getID()) && taskTable.get(victim.getID()).contains(ambulanceID))
+//						return true;
+//				}
+//			}
+//		}
+		
+		return  taskTable.keySet().contains(victim.getID()) && !taskTable.get(victim.getID()).isEmpty();		
+		
+	}
+	
+	private int getDistanceToClosestRefuge(Human victim){
+		
+		int distanceToRefuge = Integer.MAX_VALUE;
 
-			if(maxDistanceTraveledPerCycle!=0)
-				necessaryCycles = totalDistance/maxDistanceTraveledPerCycle;
-			
-			if(necessaryCycles>remainingCycles)
-				return Boolean.FALSE;
-			
+		for (EntityID ref : refuges) {
+			int dist = model.getDistance(victim.getPosition(), ref);
+			if (dist < distanceToRefuge) {
+				distanceToRefuge = dist;
+			}
+		}
+		
+		return distanceToRefuge;
+		
+	}
+	
+
+	private Boolean isSavable(Human victim, int totalDistance) {
+
+		//Calcula quantos ciclos a vitima tem de vida
+		int remainingCycles = 0;
+		if (victim.isDamageDefined() && victim.getDamage() != 0)
+			remainingCycles = victim.getHP() / victim.getDamage();
+		else
 			return Boolean.TRUE;
-		}
-		
-		private double savability(Human victim, int totalDistance){
-			int remainingCycles = 0;
-			double savability = 0;
-			
-			if(victim.isDamageDefined() && victim.isHPDefined() && victim.getDamage()!=0)
-				remainingCycles = victim.getHP()/victim.getDamage();
-			else
-				return -1;
-			
-			//TODO: Get good coeficients
-			savability = (double)remainingCycles + (double)1/totalDistance + (double)getSquadPriority(victim);
-			
-			return savability;
-		}
-		
-		private int getSquadPriority(Human victim){
-			if(victim instanceof Civilian)
-				return CIVILIAN_RESCUE_PRIORITY;
-			else if(victim instanceof AmbulanceTeam)
-				return AMBULANCE_TEAM_RESCUE_PRIORITY;
-			else if(victim instanceof PoliceForce)
-				return POLICE_FORCE_RESCUE_PRIORITY;
-			else if(victim instanceof FireBrigade)
-				return FIRE_BRIGADE_RESCUE_PRIORITY;
-			else 
-				return 0;	
-		}
 
+		// Calcula quantos ciclos precisa para salvar a vitima
+		// TODO: considerar tempo de rescue e load
+		int necessaryCycles = 0;
+
+		if (maxDistanceTraveledPerCycle != 0)
+			necessaryCycles = totalDistance / maxDistanceTraveledPerCycle;
+
+		if (necessaryCycles > remainingCycles)
+			return Boolean.FALSE;
+
+		return Boolean.TRUE;
+	}
+
+	private double getVictimSavePriority(Human victim, int totalDistance) {
+		
+		double savability = 0;		
+		savability = (double)1/totalDistance;
+
+		return savability;
+	}
+
+	private int getSquadPriority(Human victim) {
+		if (victim instanceof Civilian)
+			return CIVILIAN_RESCUE_PRIORITY;
+		else if (victim instanceof AmbulanceTeam)
+			return AMBULANCE_TEAM_RESCUE_PRIORITY;
+		else if (victim instanceof PoliceForce)
+			return POLICE_FORCE_RESCUE_PRIORITY;
+		else if (victim instanceof FireBrigade)
+			return FIRE_BRIGADE_RESCUE_PRIORITY;
+		else
+			return 0;
+	}
 
 	@Override
 	protected void refreshTaskTable(ChangeSet changed) {
@@ -551,4 +540,11 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		this.state = state;
 		log("Changed state to: " + this.state);
 	}
+	
+	private void sectorize(){
+		sectorization = new Sectorization(model, neighbours, ambulanceTeamsList.size(), VERBOSE);
+		
+		sector = sectorization.getSector(internalID);
+	}
+	
 }
