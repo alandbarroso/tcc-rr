@@ -324,45 +324,21 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	
 	@Override
 	protected EntityID selectTask() {
-		int closest = Integer.MAX_VALUE;
+		double bestPriority = 0;
 		EntityID result = null;
 		
 		// For all the buildings, we should prioritize those close to gas stations because they can explode
 		for (EntityID task : taskTable.keySet()) {
-			// If result defined
 			if(result != null){
-				if(model.getEntity(task) instanceof GasStation) {
-					if(model.getEntity(result) instanceof GasStation) {
-						if (model.getDistance(me().getID(), task) < closest) {
-							closest = model.getDistance(me().getID(), task);
-							result = task;
-						}
-					} else{
-						closest = model.getDistance(me().getID(), task);
-						result = task;
-					}
-				}
-				else if(closeToGas(task) && !(model.getEntity(result) instanceof GasStation)) {
-					if(closeToGas(result)) {
-						if (model.getDistance(me().getID(), task) < closest) {
-							closest = model.getDistance(me().getID(), task);
-							result = task;
-						}
-					} else{
-						closest = model.getDistance(me().getID(), task);
-						result = task;
-					}
-				}
-				else if(!(model.getEntity(result) instanceof GasStation) && !closeToGas(result)){
-					if (model.getDistance(me().getID(), task) < closest) {
-						closest = model.getDistance(me().getID(), task);
-						result = task;
-					}
+				double aux = getBuildingPriority(task);
+				if(aux > bestPriority){
+					result = task;
+					bestPriority = aux;
 				}
 			}
-			else {
-				closest = model.getDistance(me().getID(), task);
+			else{
 				result = task;
+				bestPriority = getBuildingPriority(task);
 			}
 		}
 
