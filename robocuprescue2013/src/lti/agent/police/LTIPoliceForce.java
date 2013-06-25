@@ -110,7 +110,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	 */
 	private void defineSectorRelatedVariables() {
 		sectorization = new Sectorization(model, neighbours,
-				policeForcesList.size(), VERBOSE);
+				policeForcesList.size(), verbose);
 
 		sector = sectorization.getSector(internalID);
 
@@ -537,9 +537,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		return msg;
 	}
 
-	/**
-	 * 
-	 */
 	private void recalculaVariaveisCiclo() {
 		currentX = me().getX();
 		currentY = me().getY();
