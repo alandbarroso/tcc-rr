@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -27,6 +28,7 @@ import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.Human;
 import rescuecore2.standard.entities.PoliceForce;
 import rescuecore2.standard.entities.Refuge;
+import rescuecore2.standard.entities.Road;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityURN;
 import rescuecore2.worldmodel.ChangeSet;
@@ -42,14 +44,14 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	private static int CIVILIAN_RESCUE_PRIORITY = 3;
 	private static int AMBULANCE_TEAM_RESCUE_PRIORITY = 1;
 
-	private List<EntityID> buildingsToCheck;
+	private Set<EntityID> buildingsToCheck;
 
 	private List<EntityID> refuges;
 	
 
 	private static enum State {
 		CARRYING_CIVILIAN, PATROLLING, TAKING_ALTERNATE_ROUTE,
-		MOVING_TO_TARGET, MOVING_TO_REFUGE, RANDOM_WALKING, RESCUEING, DEAD, BURIED
+		MOVING_TO_TARGET, MOVING_TO_REFUGE, RANDOM_WALKING, RESCUEING, DEAD, BURIED, RETURNING_TO_SECTOR
 	};
 
 	private State state;
@@ -92,15 +94,14 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 			
 		sectorize();
 		
-		buildingsToCheck = new ArrayList<EntityID>();
+		buildingsToCheck = new HashSet<EntityID>();
 		for(EntityID buildingID:buildingIDs){
 			if(sector.getLocations().keySet().contains(buildingID))
 				buildingsToCheck.add(buildingID);
 		}
 		
 		buildingsToCheck.removeAll(refuges);
-		
-		Collections.shuffle(buildingsToCheck);
+
 
 		changeState(State.RANDOM_WALKING);
 	}
@@ -209,27 +210,85 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		// Move around the map
 		// Nothing to do here. Moving on.
-		Set<EntityID> safeBuildings = getSafeBuildings(changed);
+		safeBuildings = getSafeBuildings(changed);
 		List<EntityID> path;
 
 		getSafeBuildings();
-
-		for (EntityID next : buildingsToCheck) {
-			// I need to check if it's safe to go inside this building.
-			if (safeBuildings.contains(next)) {
-				path = search.breadthFirstSearch(currentPosition, next);
-				if (path != null) {
-					sendMove(time, path);
-					changeState(State.PATROLLING);
-					return;
+		
+		// Using an aux list of buildings to check
+		Set<EntityID> auxBuildingsToCheck = new HashSet<EntityID>(buildingsToCheck);
+		
+		// We remove all the buildings that aren't safe to enter
+		auxBuildingsToCheck.retainAll(safeBuildings);
+		
+		for(EntityID bd : auxBuildingsToCheck){
+			if(model.getEntity(bd) instanceof Building){
+				Building b = (Building) model.getEntity(bd);
+				
+				if(b.isFierynessDefined()){
+					log("Building(" + bd + "): PROPERTY - Fieryness: " + b.getFieryness());
+				}
+				
+				if(b.isBrokennessDefined()){
+					log("Building(" + bd + "): PROPERTY - Brokenness: " + b.getBrokenness());
 				}
 			}
+		}
+		
+		// We then try to go to the closest building not yet checked
+		path = search.breadthFirstSearch(me().getPosition(), auxBuildingsToCheck);
+		
+		// If we find a path, we set it as the next location
+		if(path != null){
+			sendMove(time, path);
+			changeState(State.PATROLLING);
+			return;
 		}
 
 		path = randomWalk();
 		sendMove(time, path);
 		changeState(State.RANDOM_WALKING);
 		return;
+	}
+	
+	
+	protected List<EntityID> randomWalk(){
+		List<EntityID> result = new ArrayList<EntityID>();
+		EntityID current = currentPosition;
+		
+		if (!sector.getLocations().keySet().contains(currentPosition)) {
+			List<EntityID> local = new ArrayList<EntityID>(sector
+					.getLocations().keySet());
+			changeState(State.RETURNING_TO_SECTOR);
+			return search.breadthFirstSearch(currentPosition, local);
+		}
+
+		for (int i = 0; i < RANDOM_WALK_LENGTH; ++i) {
+			result.add(current);
+			List<EntityID> possible = new ArrayList<EntityID>();
+
+			for (EntityID next : sector.getNeighbours(current))
+				if (model.getEntity(next) instanceof Road)
+					possible.add(next);
+
+			Collections.shuffle(possible, new Random(me().getID().getValue()
+					+ currentTime));
+			boolean found = false;
+
+			for (EntityID next : possible) {
+				if (!result.contains(next)) {
+					current = next;
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+				break; // We reached a dead-end.
+		}
+
+		result.remove(0); // Remove actual position from path
+		changeState(State.RANDOM_WALKING);
+		return result;
 	}
 
 	/**
@@ -343,18 +402,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	}
 	
 	
-	private Boolean isVictimBeingRescued(Human victim){
-		
-//		for(EntityID ambulanceID : ambulanceTeamsList){
-//			if(!ambulanceID.equals(me().getID())){
-//				Human ambulance = (Human)model.getEntity(ambulanceID);
-//				if(victim.getPosition().equals(ambulance.getPosition())){
-//	//				if(taskTable.keySet().contains(victim.getID()) && taskTable.get(victim.getID()).contains(ambulanceID))
-//						return true;
-//				}
-//			}
-//		}
-		
+	private Boolean isVictimBeingRescued(Human victim){		
+	
 		return  taskTable.keySet().contains(victim.getID()) && !taskTable.get(victim.getID()).isEmpty();		
 		
 	}
@@ -400,7 +449,10 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	private double getVictimSavePriority(Human victim, int totalDistance) {
 		
 		double savability = 0;		
-		savability = (double)1/totalDistance;
+		if(victim.isBuriednessDefined())
+			savability = (double)1/Math.sqrt(totalDistance) + (double)100/victim.getBuriedness();
+		else
+			savability = (double)1/Math.sqrt(totalDistance);
 
 		return savability;
 	}
@@ -504,6 +556,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		for (StandardEntity next : model
 				.getEntitiesOfType(StandardEntityURN.BUILDING)) {
 			if (!((Building) next).isOnFire()) {
+				if(!((Building) next).isBrokennessDefined())
 				safe.add(next.getID());
 			}
 		}
@@ -532,6 +585,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		ss.add(State.MOVING_TO_TARGET);
 		ss.add(State.MOVING_TO_REFUGE);
 		ss.add(State.RANDOM_WALKING);
+		ss.add(State.RETURNING_TO_SECTOR);
 
 		return ss.contains(state);
 	}
