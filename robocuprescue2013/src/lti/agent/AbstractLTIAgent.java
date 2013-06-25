@@ -260,11 +260,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 			boolean found = false;
 
 			for (EntityID next : neighbours.get(current)) {
-				if (model.getEntity(next) instanceof Building) {
-					if (!((Building) model.getEntity(next)).isOnFire()) {
-						possible.add(next);
-					}
-				} else {
+				if (!(model.getEntity(next) instanceof Building)) {
 					possible.add(next);
 				}
 			}
