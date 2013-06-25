@@ -3,6 +3,7 @@ package lti.agent.fire;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -22,6 +23,8 @@ import rescuecore2.standard.entities.Hydrant;
 import rescuecore2.standard.entities.PoliceOffice;
 import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.StandardEntity;
+import rescuecore2.standard.entities.StandardEntityConstants;
+import rescuecore2.standard.entities.StandardEntityConstants.Fieryness;
 import rescuecore2.standard.entities.StandardEntityURN;
 import rescuecore2.worldmodel.ChangeSet;
 import rescuecore2.worldmodel.EntityID;
@@ -40,6 +43,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	
 	private Set<EntityID> gasStationNeighbours;
 	private int dangerousDistance;
+	
+	private HashMap<Fieryness, Double> fierynessPriority;
 
 	private static enum State {
 		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, 
@@ -85,7 +90,24 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		
 		gasStationNeighbours = calculateGasStationNeighbours();
 		
+		fierynessPriority = setFierynessPriority();
+		
 		changeState(State.RANDOM_WALKING);
+	}
+
+	private HashMap<Fieryness, Double> setFierynessPriority() {
+		HashMap<Fieryness, Double> fP = new HashMap<Fieryness, Double>();
+		fP.put(StandardEntityConstants.Fieryness.UNBURNT, 0.0);
+		fP.put(StandardEntityConstants.Fieryness.WATER_DAMAGE, 0.0);
+		fP.put(StandardEntityConstants.Fieryness.HEATING, 0.3);
+		fP.put(StandardEntityConstants.Fieryness.BURNING, 0.8);
+		fP.put(StandardEntityConstants.Fieryness.INFERNO, 0.7);
+		fP.put(StandardEntityConstants.Fieryness.MINOR_DAMAGE, 0.0);
+		fP.put(StandardEntityConstants.Fieryness.MODERATE_DAMAGE, 0.0);
+		fP.put(StandardEntityConstants.Fieryness.SEVERE_DAMAGE, 0.0);
+		fP.put(StandardEntityConstants.Fieryness.BURNT_OUT, 0.0);
+		
+		return fP;
 	}
 
 	@Override
@@ -402,13 +424,17 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		}
 		
 		result = 0;
-		if (distanceToBuilding >= 0)
+		if (distanceToBuilding >= 0){
 			result -= distanceToBuilding / maxPower;
+		}
 		result += nbSafeNeighbours/2*maxPower;
 		result += closeToGas ? 3*maxPower : 0;
 		result += nearGas ? 5*maxPower : 0;
 		result += presenceOfAgents ? 2*maxPower : 0;
 		result += presenceOfCivilians ? maxPower : 0;
+		if(((Building) model.getEntity(building)).isFierynessDefined()){
+			result += fierynessPriority.get(((Building) model.getEntity(building)).getFierynessEnum())*maxPower;
+		}
 		
 		return result;
 	}
