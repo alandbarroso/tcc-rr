@@ -44,6 +44,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 	private State state;
 
+	private boolean blocked;
+
 	@Override
 	protected void postConnect() {
 		super.postConnect();

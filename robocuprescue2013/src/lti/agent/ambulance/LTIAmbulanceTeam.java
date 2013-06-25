@@ -42,7 +42,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 	private static enum State {
 		CARRYING_CIVILIAN, PATROLLING, TAKING_ALTERNATE_ROUTE,
-		MOVING_TO_TARGET, MOVING_TO_REFUGE, RANDOM_WALKING, RESCUEING, DEAD, BURIED, RETURNING_TO_SECTOR
+		MOVING_TO_TARGET, MOVING_TO_REFUGE, RANDOM_WALKING, RETURNING_TO_SECTOR,
+		RESCUEING, DEAD, BURIED
 	};
 
 	private State state;
@@ -58,6 +59,13 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	@Override
 	protected void postConnect() {
 		super.postConnect();
+		
+		inicializaVariaveis();
+
+		changeState(State.RANDOM_WALKING);
+	}
+
+	private void inicializaVariaveis() {
 		currentX = me().getX();
 		currentY = me().getY();
 
@@ -90,9 +98,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 				buildingsToCheck.add(buildingID);
 		
 		buildingsToCheck.removeAll(refuges);
-
-
-		changeState(State.RANDOM_WALKING);
 	}
 
 	@Override
@@ -103,8 +108,23 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	@Override
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
-		currentX = me().getX();
-		currentY = me().getY();
+		recalculaVariaveisCiclo();
+		
+		for (EntityID next : buildingIDs) {
+			Building b = (Building)model.getEntity(next);
+			if (b.isBrokennessDefined() || b.isTemperatureDefined() ||
+					b.isFierynessDefined()) {
+				String t = "";
+				t += "B:(" + b.getX() + "," + b.getY() + ")@" + b.getID() + " ";
+				if (b.isBrokennessDefined())
+					t += "Broken:" + b.getBrokenness() + " ";
+				if (b.isTemperatureDefined())
+					t += "T:" + b.getTemperature() + "oC ";
+				if (b.isFierynessDefined())
+					t += b.getFierynessEnum() + " ";
+				log(t);
+			}
+		}
 
 		if (me().getHP() == 0) {
 			changeState(State.DEAD);
@@ -266,6 +286,11 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		return result;
 	}
 
+	private void recalculaVariaveisCiclo() {
+		currentX = me().getX();
+		currentY = me().getY();
+	}
+
 	/**
 	 * Check if this ambulance is carrying a civilian.
 	 * 
@@ -331,8 +356,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 		return null;
 	}
-	
-	
+		
 	private Human pickVictim() {
 		int totalDistance = 0;
 		double savePriority = 0, newSavePriority;
@@ -505,8 +529,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		for (StandardEntity next : model
 				.getEntitiesOfType(StandardEntityURN.BUILDING)) {
 			if (!((Building) next).isOnFire()) {
-				if(!((Building) next).isBrokennessDefined())
-				safe.add(next.getID());
+				if (!((Building) next).isBrokennessDefined())
+					safe.add(next.getID());
 			}
 		}
 
@@ -545,7 +569,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	}
 	
 	private void sectorize(){
-		sectorization = new Sectorization(model, neighbours, ambulanceTeamsList.size(), VERBOSE);
+		sectorization = new Sectorization(model, neighbours,
+				ambulanceTeamsList.size(), verbose);
 		
 		sector = sectorization.getSector(internalID);
 	}
