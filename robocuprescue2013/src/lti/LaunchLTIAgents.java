@@ -7,6 +7,7 @@ import lti.agent.ambulance.LTIAmbulanceTeam;
 import lti.agent.fire.LTIFireBrigade;
 import lti.agent.police.LTIPoliceForce;
 import rescuecore2.components.Component;
+import rescuecore2.components.ComponentConnectionException;
 import rescuecore2.components.ComponentLauncher;
 import rescuecore2.components.TCPComponentLauncher;
 import rescuecore2.connection.ConnectionException;
@@ -23,9 +24,14 @@ import rescuecore2.standard.messages.StandardMessageFactory;
 public final class LaunchLTIAgents {
 	
 	private static final int MAX_PLATOONS = 50;
-	private static final int MAX_CENTRES = 5;
+	private static final int MAX_CENTRES = 50;
 	private static final String VERBOSE_FLAG = "-v";
 	private static final String DEBUG_FLAG = "-d";
+	
+	private static final String FIRE_BRIGADE_CLASS = "lti.agent.fire.LTIFireBrigade";
+	private static final String POLICE_FORCE_CLASS = "lti.agent.police.LTIPoliceForce";
+	private static final String AMBULANCE_TEAM_CLASS = "lti.agent.ambulance.LTIAmbulanceTeam";
+	private static final String CENTER_CLASS = "sample.SampleCenter";
 	
 	private static boolean verbose_launch = false;
 	private static boolean debug = false;
@@ -59,35 +65,62 @@ public final class LaunchLTIAgents {
 	        }
 	        
 	        args = CommandLineOptions.processArgs(args, config);
-			int port = config.getIntValue(Constants.KERNEL_PORT_NUMBER_KEY,
-					Constants.DEFAULT_KERNEL_PORT_NUMBER);
-			String host = config.getValue(Constants.KERNEL_HOST_NAME_KEY,
-					Constants.DEFAULT_KERNEL_HOST_NAME);
-			launcher = new TCPComponentLauncher(host, port, config);
-			
-			connectPlatoon("lti.agent.fire.LTIFireBrigade");
-			connectPlatoon("lti.agent.police.LTIPoliceForce");
-			connectPlatoon("lti.agent.ambulance.LTIAmbulanceTeam");
-
-			connectCentre("sample.SampleCentre");
-
-			if (debug)
-				connect("sample.SampleCivilian", 1000);
-			
+	        if(args.length >= 7){
+				int fb = Integer.parseInt(args[0]);
+				int fs = Integer.parseInt(args[1]);
+				int pf = Integer.parseInt(args[2]);
+				int po = Integer.parseInt(args[3]);
+				int at = Integer.parseInt(args[4]);
+				int ac = Integer.parseInt(args[5]);
+				
+				int port = config.getIntValue(Constants.KERNEL_PORT_NUMBER_KEY,
+						Constants.DEFAULT_KERNEL_PORT_NUMBER);
+				// String host = config.getValue(Constants.KERNEL_HOST_NAME_KEY,
+				// Constants.DEFAULT_KERNEL_HOST_NAME);
+				
+				String host = args[6];
+				
+				launcher = new TCPComponentLauncher(host, port, config);
+				connect(fb, fs, pf, po, at, ac);
+			}
 		} catch (Exception e) {
 			Logger.error("Error connecting agents", e);
 		}
 
 	}
 
-	private static void connectPlatoon(String classname)
-			throws InterruptedException, ConnectionException {
-		connect(classname, MAX_PLATOONS);
-	}
-
-	private static void connectCentre(String classname)
-			throws InterruptedException, ConnectionException {
-		connect(classname, MAX_CENTRES);
+	private static void connect(int fb, int fs,
+			int pf, int po, int at, int ac) throws InterruptedException,
+			ConnectionException, InstantiationException, IllegalAccessException, ClassNotFoundException {
+		if(fb == -1){
+			connect(FIRE_BRIGADE_CLASS, MAX_PLATOONS);
+		} else if(fb > 0){
+			connect(FIRE_BRIGADE_CLASS, fb);
+		}
+		
+		if((fs > 0) || (fs == -1)){
+			connect(CENTER_CLASS, MAX_CENTRES);
+		}
+		
+		if(pf == -1){
+			connect(POLICE_FORCE_CLASS, MAX_PLATOONS);
+		} else if(pf > 0){
+			connect(POLICE_FORCE_CLASS, pf);
+		}
+		
+		if((po > 0) || (po == -1)){
+			connect(CENTER_CLASS, MAX_CENTRES);
+		}
+		
+		if(at == -1){
+			connect(AMBULANCE_TEAM_CLASS, MAX_PLATOONS);
+		} else if(at > 0){
+			connect(AMBULANCE_TEAM_CLASS, at);
+		}
+		
+		if((ac > 0) || (ac == -1)){
+			connect(CENTER_CLASS, MAX_CENTRES);
+		}
 	}
 
 	/**
@@ -107,17 +140,20 @@ public final class LaunchLTIAgents {
 			for (int i = 1; i < max_agents; i++) {
 				log("Launching " + agentname + " " + i + "... ");
 				c = (Component) Class.forName(classname).newInstance();
-				if (c instanceof LTIAmbulanceTeam)
+				if (c instanceof LTIAmbulanceTeam){
 					((LTIAmbulanceTeam)c).setVerbose(debug);
-				if (c instanceof LTIPoliceForce)
+				}
+				if (c instanceof LTIPoliceForce){
 					((LTIPoliceForce)c).setVerbose(debug);
-				if (c instanceof LTIFireBrigade)
+				}
+				if (c instanceof LTIFireBrigade){
 					((LTIFireBrigade)c).setVerbose(debug);
+				}
 				launcher.connect(c);
 				log(agentname + " " + i + " launched.");
 			}
 		} catch (Exception e) {
-			log(e.getMessage());
+			log(e.toString());
 		}
 		log("<<< Finished launching " + agentname + "s.");
 		log_newline();
