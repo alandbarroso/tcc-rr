@@ -7,7 +7,6 @@ import lti.agent.ambulance.LTIAmbulanceTeam;
 import lti.agent.fire.LTIFireBrigade;
 import lti.agent.police.LTIPoliceForce;
 import rescuecore2.components.Component;
-import rescuecore2.components.ComponentConnectionException;
 import rescuecore2.components.ComponentLauncher;
 import rescuecore2.components.TCPComponentLauncher;
 import rescuecore2.connection.ConnectionException;
@@ -31,7 +30,7 @@ public final class LaunchLTIAgents {
 	private static final String FIRE_BRIGADE_CLASS = "lti.agent.fire.LTIFireBrigade";
 	private static final String POLICE_FORCE_CLASS = "lti.agent.police.LTIPoliceForce";
 	private static final String AMBULANCE_TEAM_CLASS = "lti.agent.ambulance.LTIAmbulanceTeam";
-	private static final String CENTER_CLASS = "sample.SampleCenter";
+	private static final String CENTER_CLASS = "lti.centre.SimpleCentre";
 	
 	private static boolean verbose_launch = false;
 	private static boolean debug = false;
