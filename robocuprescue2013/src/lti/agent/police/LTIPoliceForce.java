@@ -206,7 +206,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			obstructingBlockade = getBestClosestBlockadeToClear();
 			if (obstructingBlockade != null)
 				clearObstructingBlockade();
-			else if (path.size() > 0)
+			else
 				movingToUnblock();
 			return;
 		}
@@ -359,27 +359,30 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	}
 
 	private void movingToUnblock() {
-		Rectangle2D rect = ((Road) model.getEntity(path.get(0)))
-				.getShape().getBounds2D();
-		Random rdn = new Random();
-		int x = (int) (rect.getMinX() + rdn.nextDouble()
-				* (rect.getMaxX() - rect.getMinX()));
-		int y = (int) (rect.getMinY() + rdn.nextDouble()
-				* (rect.getMaxY() - rect.getMinY()));
-
-		if (rect.contains(x, y) && currentTime % 2 == 0) {
-			EntityID e = path.get(0);
-			path = new ArrayList<EntityID>();
-			path.add(e);
-			sendMove(currentTime, path, x, y);
-			changeState(State.MOVING_TO_UNBLOCK);
-			log("Found path: " + path + " and sent move to dest: " + x
-					+ "," + y);
-		} else {
-			path = randomWalk();
-			sendMove(currentTime, path);
-			log("Path calculated to unblock and sent move: " + path);
+		if (path != null && path.size() > 0 &&
+				model.getEntity(path.get(0)) instanceof Road) {
+			Rectangle2D rect = ((Road) model.getEntity(path.get(0)))
+					.getShape().getBounds2D();
+			Random rdn = new Random();
+			int x = (int) (rect.getMinX() + rdn.nextDouble()
+					* (rect.getMaxX() - rect.getMinX()));
+			int y = (int) (rect.getMinY() + rdn.nextDouble()
+					* (rect.getMaxY() - rect.getMinY()));
+	
+			if (rect.contains(x, y) && currentTime % 3 == 0) {
+				EntityID e = path.get(0);
+				path = new ArrayList<EntityID>();
+				path.add(e);
+				sendMove(currentTime, path, x, y);
+				changeState(State.MOVING_TO_UNBLOCK);
+				log("Found path: " + path + " and sent move to dest: " + x
+						+ "," + y);
+				return;
+			}
 		}
+		path = randomWalk();
+		sendMove(currentTime, path);
+		log("Path calculated to unblock and sent move: " + path);
 	}
 
 	private List<EntityID> getPathToEntranceTarget() {
@@ -759,7 +762,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			
 			isImportantPosition = qt > 0;
 			// Evaluate as 0 those which are already cleared
-			if (buildingEntrancesCleared.containsAll(b.getNeighbours()))
+			if (buildingEntrancesCleared.containsAll(b.getNeighbours()) && qt == 0)
 				return 0;
 		}
 		
