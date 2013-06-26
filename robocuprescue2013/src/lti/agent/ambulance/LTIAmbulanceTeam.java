@@ -110,7 +110,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		super.think(time, changed, heard);
 		recalculaVariaveisCiclo();
 		
-		for (EntityID next : buildingIDs) {
+		/*for (EntityID next : buildingIDs) {
 			Building b = (Building)model.getEntity(next);
 			if (b.isBrokennessDefined() || b.isTemperatureDefined() ||
 					b.isFierynessDefined()) {
@@ -124,7 +124,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 					t += b.getFierynessEnum() + " ";
 				log(t);
 			}
-		}
+		}*/
 
 		if (me().getHP() == 0) {
 			changeState(State.DEAD);
