@@ -55,8 +55,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 	private State state;
 
-	private boolean blocked;
-
 	@Override
 	protected void postConnect() {
 		super.postConnect();
@@ -137,8 +135,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 		// Verify if you are blocked
 		if (amIBlocked(time)) {
-			blocked = true;
-			
 			log("Blocked! Random walk to escape");
 			changeState(State.RANDOM_WALKING);
 			List<EntityID> path = randomWalk();
