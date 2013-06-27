@@ -42,7 +42,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	private List<EntityID> refuges;
 
 	private static enum State {
-		CARRYING_CIVILIAN, PATROLLING, TAKING_ALTERNATE_ROUTE, MOVING_TO_UNBLOCK,
+		LOADING_CIVILIAN, PATROLLING, TAKING_ALTERNATE_ROUTE, MOVING_TO_UNBLOCK,
 		MOVING_TO_TARGET, MOVING_TO_REFUGE, RANDOM_WALKING, RETURNING_TO_SECTOR,
 		RESCUEING, DEAD, BURIED
 	};
@@ -112,23 +112,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
 		recalculaVariaveisCiclo();
-		
-		log("taskTable: " + taskTable);
-		for (EntityID next : buildingIDs) {
-			Building b = (Building)model.getEntity(next);
-			if (b.isBrokennessDefined() || b.isTemperatureDefined() ||
-					b.isFierynessDefined()) {
-				String t = "";
-				t += "B:(" + b.getX() + "," + b.getY() + ")@" + b.getID() + " ";
-				if (b.isBrokennessDefined())
-					t += "Broken:" + b.getBrokenness() + " ";
-				if (b.isTemperatureDefined())
-					t += "T:" + b.getTemperature() + "oC ";
-				if (b.isFierynessDefined())
-					t += b.getFierynessEnum() + " ";
-				log(t);
-			}
-		}
 
 		if (me().getHP() == 0) {
 			changeState(State.DEAD);
@@ -149,8 +132,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		
 		// If I'm blocked it's probably because there's an obstructing blockade
 		if (amIBlocked(time)) {
-			movingToUnblock();
-			return;
+			if (movingToUnblock())
+				return;
 		}
 		
 		sendMessageAboutPerceptions(changed);
@@ -160,8 +143,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		// Work on the task, if you have one
 		if (target != null) {
 			// Am I carrying a civilian?
-			if (targetOnBoard()) {
-				changeState(State.CARRYING_CIVILIAN);
+			if (state.equals(State.LOADING_CIVILIAN) || state.equals(State.MOVING_TO_REFUGE)) {
 				// Am I at a refuge?
 				if (refuges.contains(currentPosition)) {
 					sendUnload(time);
@@ -170,6 +152,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 				}
 				// No? I need to get to one, then.
 				path = search.breadthFirstSearch(currentPosition, refuges);
+				if (path == null)
+					path = randomWalk();
 				changeState(State.MOVING_TO_REFUGE);
 
 				if (path != null && path.size() > 0) {
@@ -188,7 +172,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 						log("Rescueing " + victim + " buriedness: " + victim.getBuriedness());
 					} else if (victim instanceof Civilian) {
 						sendLoad(time, target);
-						log("Loading civilian" + victim);
+						changeState(State.LOADING_CIVILIAN);
+						log("Loading civilian " + victim);
 					}
 					return;
 				} else {
@@ -232,13 +217,13 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		}
 	}
 
-	private void movingToUnblock() {
+	private boolean movingToUnblock() {
 		if (target != null && state.equals(State.MOVING_TO_TARGET)) {
 			// Find another task
 			taskDropped = target;
 			target = null;
 			log("Dropped task: " + taskDropped);
-			return;
+			return false;
 		}
 		
 		if (path != null && path.size() > 0 &&
@@ -259,14 +244,16 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 				changeState(State.MOVING_TO_UNBLOCK);
 				log("Found path: " + path + " and sent move to dest: " + x
 						+ "," + y);
-				return;
+				return true;
 			}
 		}
 		path = randomWalk();
 		if (path != null && path.size() > 0) {
 			sendMove(currentTime, path);
 			log("Path calculated to unblock and sent move: " + path);
+			return true;
 		}
+		return false;
 	}
 	
 	private void sendMessageAboutPerceptions(ChangeSet changed) {
@@ -353,14 +340,11 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	 * @return true if the ambulance is carrying a civilian, false otherwise.
 	 */
 	private boolean targetOnBoard() {
-		if (!(model.getEntity(target) instanceof Human)) {
-			log("ERROR... Should be fixed");
-			return false;
+		if (target != null && model.getEntity(target) instanceof Human) {	
+			Human t = (Human) model.getEntity(target);
+			if (t.isPositionDefined())
+				return t.getPosition().equals(getID());
 		}
-		
-		Human t = (Human) model.getEntity(target);
-		if (t.isPositionDefined())
-			return t.getPosition().equals(getID());
 
 		log("Position of the human target not defined. Can't say if it's on board");
 		return false;
@@ -537,6 +521,11 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		}
 
 		victims.removeAll(toRemove);
+		
+		//Include as victims the target loaded
+		if (targetOnBoard())
+			victims.add(target);
+		
 		taskTable.keySet().retainAll(victims);
 		victims.removeAll(taskTable.keySet());
 
