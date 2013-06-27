@@ -12,8 +12,6 @@ done
 
 THE_CLASSPATH=${THE_CLASSPATH}:./bin
 
-echo $THE_CLASSPATH
-
 javaArgs="-cp $THE_CLASSPATH"
 
 launchClass="lti.LaunchLTIAgents"
