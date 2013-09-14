@@ -128,7 +128,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	
 	//Valor de distancia medio observado nos logs com testes 
 	//TODO: Pegar um valor mais condizente, talvez no ambiente do simulador
-	protected int maxDistanceTraveledPerCycle = 500;
+	protected int maxDistanceTraveledPerCycle = 5000;
 
 	protected Set<EntityID> buildingEntrancesCleared;
 
@@ -214,7 +214,6 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		lastX = currentX;
 		lastY = currentY;
 		currentTime = time;	
-		taskDropped = null;
 	}
 
 	/**
@@ -1029,12 +1028,18 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		if (taskDropped != null) {
 			TaskDrop drop = new TaskDrop(taskDropped.getValue());
 			message.addParameter(drop);
+			taskDropped = null;
 
 			/* Se uma tarefa foi escohida, envia-se uma mensagem relatando-a */
 			if (target != null) {
 				TaskPickup task = new TaskPickup(target.getValue());
 				message.addParameter(task);
 			}
+		}
+		/* Se uma tarefa foi escohida, envia-se uma mensagem relatando-a */
+		if (target != null && currentTime == config.getIntValue(KernelConstants.IGNORE_AGENT_COMMANDS_KEY)) {
+			TaskPickup task = new TaskPickup(target.getValue());
+			message.addParameter(task);
 		}
 
 		return message;

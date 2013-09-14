@@ -1,7 +1,9 @@
 package lti.utils;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -113,7 +115,8 @@ public class Search {
 				found = true;
 				break;
 			}
-			Collection<EntityID> neighbours = graph.get(next);
+			List<EntityID> neighbours = new ArrayList<EntityID>(graph.get(next));
+			Collections.shuffle(neighbours);
 			if (neighbours.isEmpty()) {
 				continue;
 			}
@@ -176,7 +179,9 @@ public class Search {
 				found = true;
 				break;
 			}
-			Collection<EntityID> neighbours = sector.getNeighbours(next);
+			List<EntityID> neighbours = new ArrayList<EntityID>(
+					sector.getNeighbours(next));
+			Collections.shuffle(neighbours);
 			if (neighbours.isEmpty()) {
 				continue;
 			}
