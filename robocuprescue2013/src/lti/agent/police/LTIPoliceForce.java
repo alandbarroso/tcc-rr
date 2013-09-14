@@ -20,6 +20,7 @@ import area.Sector;
 import area.Sectorization;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
+import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.Blockade;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.Edge;
@@ -176,7 +177,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	@Override
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
-
 		recalculaVariaveisCiclo();
 
 		if (me().getHP() == 0) {
@@ -185,6 +185,11 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		}
 
 		if (me().getBuriedness() != 0) {
+			if (target != null) {
+				taskDropped = target;
+				target = null;
+				log("Dropped task: " + taskDropped);
+			}
 			changeState(State.BURIED);
 			sendMessageAboutPerceptions(changed, new Message());
 			return;
@@ -196,14 +201,15 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		// and selection
 		Message msg = verifyBuildingEntrancesToBeCleared(new Message());
 
+		evaluateTaskDroppingAndSelection(changed);
+		
 		sendMessageAboutPerceptions(changed, msg);
 		
-		evaluateTaskDroppingAndSelection(changed);
 
 		
 		// If I'm blocked it's probably because there's an obstructing blockade
 		if (amIBlocked(time)) {
-			obstructingBlockade = getBestClosestBlockadeToClear();
+			obstructingBlockade = getBestClosestBlockadeToClear(changed);
 			if (obstructingBlockade != null)
 				clearObstructingBlockade();
 			else
@@ -246,10 +252,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private boolean workedOnTargetBuilding() {
 		Building areaEntity = (Building) model.getEntity(target);
 		List<EntityID> closestRoadIds = new ArrayList<EntityID>();
-		for (EntityID e : areaEntity.getNeighbours())
-			if (model.getEntity(e) instanceof Road &&
-					!buildingEntrancesCleared.contains(e))
-				closestRoadIds.add(e);
+		closestRoadIds.addAll(areaEntity.getNeighbours());
 		if (closestRoadIds.size() > 0) {
 			path = getPathToTarget(closestRoadIds);
 		
@@ -274,8 +277,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			Building areaEntity = (Building) model.getEntity(victim.getPosition());
 			List<EntityID> closestRoadIds = new ArrayList<EntityID>();
 			for (EntityID e : areaEntity.getNeighbours())
-				if (model.getEntity(e) instanceof Road &&
-						!buildingEntrancesCleared.contains(e))
+				if (model.getEntity(e) instanceof Road)
 					closestRoadIds.add(e);
 			if (closestRoadIds.size() > 0) {
 				path = getPathToTarget(closestRoadIds);
@@ -514,31 +516,36 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			if(!target_util) {
 				taskDropped = target;
 				target = null;
+				log("Dropped task: " + taskDropped);
 			}
 		}
 		
-		if (buildingEntrancesToBeCleared.contains(currentPosition)) {
-			msg.addParameter(new BuildingEntranceCleared(currentPosition
-					.getValue()));
-			buildingEntrancesCleared.add(currentPosition);
-			buildingEntrancesToBeCleared.remove(currentPosition);
-			log("Just cleared one more entrance. Yet "
-					+ buildingEntrancesToBeCleared.size()
-					+ " building entrances to come");
-		} else if (model.getEntity(currentPosition) instanceof Road &&
-				!buildingEntrancesCleared.contains(currentPosition)) {
-			Road r = (Road) model.getEntity(currentPosition);
-			for (EntityID neighbourID : r.getNeighbours())
-				if (model.getEntity(neighbourID) instanceof Building) {
-					msg.addParameter(new BuildingEntranceCleared(currentPosition
-							.getValue()));
-					buildingEntrancesCleared.add(currentPosition);
-					log("Just cleared one more entrance, " +
-							"not from my sector but to save victims. " +
-							"Yet " + buildingEntrancesToBeCleared.size() + " to come.");
-					break;
-				}
+		// Done with blockades in this position
+		if (countBlockades(currentPosition) == 0) {
+			if (buildingEntrancesToBeCleared.contains(currentPosition)) {
+				msg.addParameter(new BuildingEntranceCleared(currentPosition
+						.getValue()));
+				buildingEntrancesCleared.add(currentPosition);
+				buildingEntrancesToBeCleared.remove(currentPosition);
+				log("Just cleared one more entrance. Yet "
+						+ buildingEntrancesToBeCleared.size()
+						+ " building entrances to come");
+			} else if (model.getEntity(currentPosition) instanceof Road &&
+					!buildingEntrancesCleared.contains(currentPosition)) {
+				Road r = (Road) model.getEntity(currentPosition);
+				for (EntityID neighbourID : r.getNeighbours())
+					if (model.getEntity(neighbourID) instanceof Building) {
+						msg.addParameter(new BuildingEntranceCleared(currentPosition
+								.getValue()));
+						buildingEntrancesCleared.add(currentPosition);
+						log("Just cleared one more entrance, " +
+								"not from my sector but to save victims. " +
+								"Yet " + buildingEntrancesToBeCleared.size() + " to come.");
+						break;
+					}
+			}
 		}
+		
 
 		if (buildingEntrancesToBeCleared.size() == 0) {
 			if (sectorsLeftToSearch.size() > 0) {
@@ -554,6 +561,14 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		}
 
 		return msg;
+	}
+
+	private int countBlockades(EntityID curPos) {
+		if (curPos != null)
+			if (model.getEntity(curPos) instanceof Area)
+				if (((Area)model.getEntity(curPos)).isBlockadesDefined())
+					return ((Area)model.getEntity(curPos)).getBlockades().size();
+		return -1;
 	}
 
 	private void recalculaVariaveisCiclo() {
@@ -630,19 +645,26 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	 * 
 	 * @return The closest blockade.
 	 */
-	private EntityID getBestClosestBlockadeToClear() {
+	private EntityID getBestClosestBlockadeToClear(ChangeSet changed) {
 		int maxRepairCost = 0, dist, repairCost;
 		EntityID result = null;
-		Set<StandardEntity> blockades = new HashSet<StandardEntity>(
-				model.getEntitiesOfType(StandardEntityURN.BLOCKADE));
+		Set<EntityID> blockades = getVisibleEntitiesOfType(
+				StandardEntityURN.BLOCKADE, changed);
 
-		for (StandardEntity next : blockades) {
-			dist = model.getDistance(getID(), next.getID());
-			repairCost = ((Blockade) next).getRepairCost();
+		for (EntityID next : blockades) {
+			Blockade block = (Blockade) model.getEntity(next);
+				
+			dist = model.getDistance(getID(), next);
+			repairCost = block.getRepairCost();
 
-			if (dist <= minClearDistance*3/2.0 && repairCost >= maxRepairCost) {
-				result = next.getID();
-				maxRepairCost = repairCost;
+			if (dist <= minClearDistance) {
+				if (buildingEntrancesToBeCleared.contains(block.getPosition())) {
+					return next;
+				}
+				if (repairCost >= maxRepairCost) {
+					result = next;
+					maxRepairCost = repairCost;
+				}
 			}
 		}
 
@@ -666,7 +688,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		//log("taskTable: " + taskTable);
 		//log("knownVictims: " + knownVictims);
 		//log("knownBlockades: " + knownBlockades);
-		for (EntityID next : taskTable.keySet()) {			
+		for (EntityID next : taskTable.keySet()) {	
+			if (tooManyForATask(next))
+				continue;
 			StandardEntity taskEntity = model.getEntity(next);
 			
 			//Se a tarefa for do tipo human, eh uma vitima
@@ -719,14 +743,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			if (model.getEntity(blockade.getPosition()) instanceof Road) {
 				Road rd = (Road)model.getEntity(blockade.getPosition());
 				for(EntityID e : rd.getNeighbours())
-					if (model.getEntity(e) instanceof Building) {
-						int ax = (rd.getEdgeTo(e).getStartX() + rd.getEdgeTo(e).getEndX())/2;
-						int ay = (rd.getEdgeTo(e).getStartY() + rd.getEdgeTo(e).getEndY())/2;
-						int bx = blockade.getX();
-						int by = blockade.getY();
-						if ((bx-ax)*(bx-ax) + (by-ay)*(by-ay) < 5000*5000)
+					if (model.getEntity(e) instanceof Building)
+						if(pos.equals(currentPosition))
 							benefit += 8;
-					}
 			}
 		} else if (taskEntity instanceof Human) {
 			if (clearedPathToVictims.contains(taskEntity.getID()))
@@ -753,16 +772,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			Building b = (Building) taskEntity;
 			benefit = 15;
 			pos = b.getID();
-			
-			int qt = 0;
-			for (EntityID e: b.getNeighbours())
-				if (model.getEntity(e) instanceof Road &&
-						((Road)model.getEntity(e)).isBlockadesDefined())
-					qt += ((Road)model.getEntity(e)).getBlockades().size();
-			
-			isImportantPosition = qt > 0;
+			isImportantPosition = true;
 			// Evaluate as 0 those which are already cleared
-			if (buildingEntrancesCleared.containsAll(b.getNeighbours()) && qt == 0)
+			if (buildingEntrancesCleared.containsAll(b.getNeighbours()))
 				return 0;
 		}
 		
@@ -894,10 +906,27 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	@Override
 	protected void dropTask(int time, ChangeSet changed) {
 		if (!taskTable.containsKey(target) ||
-				buildingEntrancesCleared.contains(currentPosition)) {
+				buildingEntrancesCleared.contains(currentPosition) ||
+				tooManyForATask(target)) {
 			taskDropped = target;
 			target = null;
 		}
+	}
+
+	private boolean tooManyForATask(EntityID targ) {
+		//Let refuges have more than one agent
+		if (targ != null && model.getEntity(targ) instanceof Refuge)
+			return false;
+		
+		if (taskTable.get(targ).size() >= 1) {
+			int minimo = Integer.MAX_VALUE - 1;
+			for (EntityID t: taskTable.get(targ))
+					minimo = Math.min(t.getValue(), minimo);
+			if (minimo != getID().getValue()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Override
