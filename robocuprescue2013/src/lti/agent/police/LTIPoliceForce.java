@@ -72,6 +72,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private State lastState;
 
 	private EntityID lastTarget;
+	
+	private EntityID lastObstructingBlockade;
 
 	private List<EntityID> path;
 	
@@ -227,10 +229,10 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				if (workedOnTargetBlockade(changed))
 					return;
 			} else if (model.getEntity(target) instanceof Human) {
-				if (workedOnTargetVictim())
+				if (workedOnTargetVictim(changed))
 					return;
 			} else if (model.getEntity(target) instanceof Building) {
-				if (workedOnTargetBuilding())
+				if (workedOnTargetBuilding(changed))
 					return;
 			}
 		}
@@ -243,13 +245,12 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			path = randomWalk();
 
 		if (path != null) {
-			sendMove(time, path);
-			log("Path calculated and sent move: " + path);
+			moveIfPathClear(changed, path);
 			return;
 		}
 	}
 
-	private boolean workedOnTargetBuilding() {
+	private boolean workedOnTargetBuilding(ChangeSet changed) {
 		Building areaEntity = (Building) model.getEntity(target);
 		List<EntityID> closestRoadIds = new ArrayList<EntityID>();
 		closestRoadIds.addAll(areaEntity.getNeighbours());
@@ -262,7 +263,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 					Edge edge = areaEntity.getEdgeTo(e.getID());
 					int x = (edge.getStartX()+edge.getEndX())/2;
 					int y = (edge.getStartY()+edge.getEndY())/2;
-					moveToTarget(x, y);
+					moveToTargetIfPathClear(changed, path, x, y);
 					return true;
 				}
 			}
@@ -270,7 +271,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		return false;
 	}
 
-	private boolean workedOnTargetVictim() {
+	private boolean workedOnTargetVictim(ChangeSet changed) {
 		Human victim = (Human) model.getEntity(target);
 		
 		if (model.getEntity(victim.getPosition()) instanceof Building) {
@@ -289,7 +290,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 						int x = (edge.getStartX()+edge.getEndX())/2;
 						int y = (edge.getStartY()+edge.getEndY())/2;
 						clearedPathToVictims.add(path.get(path.size()-1));
-						moveToTarget(x, y);
+						moveToTargetIfPathClear(changed, path, x, y);
 						return true;
 					}
 				}
@@ -301,7 +302,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private boolean workedOnTargetBlockade(ChangeSet changed) {
 		// Is the target visible and inside clearing range?
 		if (blockadeInRange(target, changed)) {
-			clearBlockade();
+			clearBlockade(target);
 			return true;
 		}
 
@@ -406,6 +407,58 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		return path;
 	}
 
+	private void moveIfPathClear(ChangeSet changed, List<EntityID> path) {
+		obstructingBlockade = getPossibleObstructingBlockade(changed, path);
+		if (obstructingBlockade != null) {
+			clearObstructingBlockade();
+			return;
+		}
+		log("moveIfPathClear: No obstructing blockade to path");
+		log("Path calculated and sent move: " + path);
+		sendMove(currentTime, path);
+	}
+	
+	private void moveToTargetIfPathClear(ChangeSet changed, List<EntityID> path, int x, int y) {
+		obstructingBlockade = getPossibleObstructingBlockade(changed, path);
+		if (obstructingBlockade != null) {
+			clearObstructingBlockade();
+			return;
+		}
+		log("moveToTargetIfPathClear: No obstructing blockade to path");
+		moveToTarget(x, y);
+	}
+	
+	private EntityID getPossibleObstructingBlockade(ChangeSet changed, List<EntityID> path) {
+		int maxRepairCost = 0, dist, repairCost;
+		EntityID result = null;
+		Set<EntityID> blockades = getVisibleEntitiesOfType(
+				StandardEntityURN.BLOCKADE, changed);
+		
+		for (EntityID next : blockades) {
+			Blockade block = (Blockade) model.getEntity(next);
+				
+			dist = getSmallestDistanceFromMe(next);
+			repairCost = block.getRepairCost();
+
+			if (dist <= minClearDistance*3/4.0 &&
+				(path.contains(block.getPosition())
+						|| currentPosition.equals(block.getPosition())) &&
+				repairCost >= maxRepairCost) {
+					result = next;
+					maxRepairCost = repairCost;
+			}
+		}
+		
+		if (state != null && state.equals(lastState)
+				&& result != null && result.equals(lastObstructingBlockade)
+				&& lastRepairCost == maxRepairCost) {
+			log("Last time clearing blockade was ineffective, so need to get closer");
+			return null;
+		}
+			
+		return result;
+	}
+
 	private void moveToTarget(int x, int y) {
 		changeState(State.MOVING_TO_TARGET);
 		sendMove(currentTime, path, x, y);
@@ -430,14 +483,14 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	/**
 	 * @param time
 	 */
-	private void clearBlockade() {
+	private void clearBlockade(EntityID blockadeID) {
 		changeState(State.CLEARING);
-		sendClearArea(currentTime, target);
+		sendClearArea(currentTime, blockadeID);
 
-		int repairCost = ((Blockade) model.getEntity(target)).getRepairCost();
+		int repairCost = ((Blockade) model.getEntity(blockadeID)).getRepairCost();
 		lastRepairCost = repairCost;
 		log("Sent clear to remove " + repairRate + "/" + repairCost
-				+ " of the target: " + target);
+				+ " of the target: " + blockadeID);
 	}
 
 	/**
@@ -572,9 +625,11 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	}
 
 	private void recalculaVariaveisCiclo() {
+		lastState = this.state;
 		currentX = me().getX();
 		currentY = me().getY();
 		lastTarget = target;
+		lastObstructingBlockade = obstructingBlockade;
 	}
 
 	protected List<EntityID> randomWalk() {
@@ -629,14 +684,15 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			return false;
 		
 		int repairCost = ((Blockade) model.getEntity(blockade)).getRepairCost();
-		boolean stuck = lastState == state && lastTarget == blockade
+		boolean stuck = state != null && state.equals(lastState)
+				&& blockade != null && blockade.equals(lastTarget)
 				&& lastRepairCost == repairCost;
 		if (stuck)
 			log("Last time clearing blockade was ineffective, so need to get closer");
 
 		return getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE, changed)
 				.contains(blockade)
-				&& model.getDistance(me().getID(), blockade) < minClearDistance
+				&& getSmallestDistanceFromMe(blockade) < minClearDistance
 				&& !stuck;
 	}
 
@@ -654,7 +710,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		for (EntityID next : blockades) {
 			Blockade block = (Blockade) model.getEntity(next);
 				
-			dist = model.getDistance(getID(), next);
+			dist = getSmallestDistanceFromMe(next);
 			repairCost = block.getRepairCost();
 
 			if (dist <= minClearDistance) {
@@ -778,7 +834,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				return 0;
 		}
 		
-		thisDistance = model.getDistance(getID(), taskEntity.getID());
+		thisDistance = getSmallestDistanceFromMe(taskEntity.getID());
 		samePosition = pos.equals(currentPosition);
 		isInSector = sector.getLocations().keySet().contains(pos);
 		
@@ -933,6 +989,35 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	protected EnumSet<StandardEntityURN> getRequestedEntityURNsEnum() {
 		return EnumSet.of(StandardEntityURN.POLICE_FORCE);
 	}
+	
+	private int getSmallestDistanceFromMe(EntityID e) {
+		StandardEntity a = model.getEntity(getID());
+        StandardEntity b = model.getEntity(e);
+        if (a == null || b == null) {
+            return -1;
+        }
+        
+        if (!(b instanceof Blockade && ((Blockade)b).isApexesDefined()))
+        	return model.getDistance(a, b);
+        
+        Pair<Integer, Integer> a2 = a.getLocation(model);
+        if (a2 == null) {
+            return -1;
+        }
+        
+        double dx, dy;
+        int dist, minDist = model.getDistance(a, b);
+        int[] apexList = ((Blockade)b).getApexes();
+        for (int i = 0; i < apexList.length; i+=2) {
+        	dx = Math.abs(a2.first() - apexList[i]);
+            dy = Math.abs(a2.second() - apexList[i+1]);
+        	dist = (int)Math.hypot(dx, dy);
+        	if (dist < minDist)
+        		minDist = dist;
+		}
+        
+        return minDist;
+	}
 
 	private void sendClearArea(int time, EntityID target) {
 		Blockade block = (Blockade) model.getEntity(target);
@@ -959,7 +1044,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	}
 
 	private void changeState(State state) {
-		lastState = this.state;
 		this.state = state;
 		log("Changed state to: " + this.state);
 	}
