@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- WARNING: Eclipse auto-generated file.
+              Any modifications will be overwritten.
+              To include a user specific buildfile here, simply create one in the same
+              directory with the processing instruction <?eclipse.ant.import?>
+              as the first entry and export the buildfile again. --><project basedir="." default="build" name="Poseidon">
+    <property environment="env"/>
+    <property name="debuglevel" value="source,lines,vars"/>
+    <property name="target" value="1.7"/>
+    <property name="source" value="1.7"/>
+    <path id="Poseidon.classpath">
+        <pathelement location="bin"/>
+        <pathelement location="lib/commons-logging-1.1.1.jar"/>
+        <pathelement location="lib/dom4j.jar"/>
+        <pathelement location="lib/jaxen-1.1.1.jar"/>
+        <pathelement location="lib/jcommon-1.0.16.jar"/>
+        <pathelement location="lib/jfreechart-1.0.13.jar"/>
+        <pathelement location="lib/jscience-4.3.jar"/>
+        <pathelement location="lib/jsi-1.0b2p1.jar"/>
+        <pathelement location="lib/jts-1.11.jar"/>
+        <pathelement location="lib/junit-4.5.jar"/>
+        <pathelement location="lib/log4j-1.2.15.jar"/>
+        <pathelement location="lib/rescuecore.jar"/>
+        <pathelement location="lib/resq-fire.jar"/>
+        <pathelement location="lib/trove-0.1.8.jar"/>
+        <pathelement location="lib/uncommons-maths-1.2.jar"/>
+        <pathelement location="lib/xml-0.0.6.jar"/>
+        <pathelement location="lib/rescuecore2.jar"/>
+        <pathelement location="lib/standard.jar"/>
+    </path>
+    <path id="run.LaunchComponents.bootclasspath"/>
+    <target name="init">
+        <mkdir dir="bin"/>
+        <copy includeemptydirs="false" todir="bin">
+            <fileset dir="src">
+                <exclude name="**/*.launch"/>
+                <exclude name="**/*.java"/>
+            </fileset>
+        </copy>
+    </target>
+    <target name="clean">
+        <delete dir="bin"/>
+        <delete dir="Poseidon_lib/"/>
+        <delete file="Poseidon.jar"/>
+    </target>
+    <target depends="clean" name="cleanall"/>
+    <target depends="build-subprojects,build-project" name="build"/>
+    <target name="build-subprojects"/>
+    <target depends="init" name="build-project">
+        <echo message="${ant.project.name}: ${ant.file}"/>
+        <javac debug="true" debuglevel="${debuglevel}" destdir="bin" includeantruntime="false" source="${source}" target="${target}">
+            <src path="src"/>
+            <classpath refid="Poseidon.classpath"/>
+        </javac>
+    </target>
+    <target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects"/>
+    <target description="copy Eclipse compiler jars to ant lib directory" name="init-eclipse-compiler">
+        <copy todir="${ant.library.dir}">
+            <fileset dir="${ECLIPSE_HOME}/plugins" includes="org.eclipse.jdt.core_*.jar"/>
+        </copy>
+        <unzip dest="${ant.library.dir}">
+            <patternset includes="jdtCompilerAdapter.jar"/>
+            <fileset dir="${ECLIPSE_HOME}/plugins" includes="org.eclipse.jdt.core_*.jar"/>
+        </unzip>
+    </target>
+    <target description="compile project with Eclipse compiler" name="build-eclipse-compiler">
+        <property name="build.compiler" value="org.eclipse.jdt.core.JDTCompilerAdapter"/>
+        <antcall target="build"/>
+    </target>
+    <target name="LaunchComponents">
+        <java classname="rescuecore2.LaunchComponents" failonerror="true" fork="yes">
+            <classpath refid="run.LaunchComponents.classpath"/>
+            <bootclasspath>
+                <path refid="run.LaunchComponents.bootclasspath"/>
+            </bootclasspath>
+        </java>
+    </target>
+
+    <target name="create_run_jar">
+        <jar destfile="Poseidon.jar">
+            <manifest>
+                <attribute name="Main-Class" value="rescuecore2.LaunchComponents"/>
+                <attribute name="Class-Path" value=". ./Poseidon_lib/commons-logging-1.1.1.jar ./Poseidon_lib/dom4j.jar ./Poseidon_lib/jaxen-1.1.1.jar ./Poseidon_lib/jcommon-1.0.16.jar ./Poseidon_lib/jfreechart-1.0.13.jar ./Poseidon_lib/jscience-4.3.jar ./Poseidon_lib/jsi-1.0b2p1.jar ./Poseidon_lib/jts-1.11.jar ./Poseidon_lib/junit-4.5.jar ./Poseidon_lib/log4j-1.2.15.jar ./Poseidon_lib/rescuecore.jar ./Poseidon_lib/resq-fire.jar ./Poseidon_lib/trove-0.1.8.jar ./Poseidon_lib/uncommons-maths-1.2.jar ./Poseidon_lib/xml-0.0.6.jar ./Poseidon_lib/rescuecore2.jar ./Poseidon_lib/standard.jar"/>
+            </manifest>
+            <fileset dir="bin"/>
+        </jar>
+        <delete dir="Poseidon_lib"/>
+        <mkdir dir="Poseidon_lib"/>
+        <copy file="lib/commons-logging-1.1.1.jar" todir="Poseidon_lib"/>
+        <copy file="lib/dom4j.jar" todir="Poseidon_lib"/>
+        <copy file="lib/jaxen-1.1.1.jar" todir="Poseidon_lib"/>
+        <copy file="lib/jcommon-1.0.16.jar" todir="Poseidon_lib"/>
+        <copy file="lib/jfreechart-1.0.13.jar" todir="Poseidon_lib"/>
+        <copy file="lib/jscience-4.3.jar" todir="Poseidon_lib"/>
+        <copy file="lib/jsi-1.0b2p1.jar" todir="Poseidon_lib"/>
+        <copy file="lib/jts-1.11.jar" todir="Poseidon_lib"/>
+        <copy file="lib/junit-4.5.jar" todir="Poseidon_lib"/>
+        <copy file="lib/log4j-1.2.15.jar" todir="Poseidon_lib"/>
+        <copy file="lib/rescuecore.jar" todir="Poseidon_lib"/>
+        <copy file="lib/resq-fire.jar" todir="Poseidon_lib"/>
+        <copy file="lib/trove-0.1.8.jar" todir="Poseidon_lib"/>
+        <copy file="lib/uncommons-maths-1.2.jar" todir="Poseidon_lib"/>
+        <copy file="lib/xml-0.0.6.jar" todir="Poseidon_lib"/>
+        <copy file="lib/rescuecore2.jar" todir="Poseidon_lib"/>
+        <copy file="lib/standard.jar" todir="Poseidon_lib"/>
+    </target>
+
+</project>

@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="mrl" default="all">
+  
+  
+  <property file="mrl.properties"/>
+  <!-- Uncomment the following property if no tests compilation is needed -->
+  <!-- 
+  <property name="skip.tests" value="true"/>
+   -->
+  
+  <!-- Compiler options -->
+  
+  <property name="compiler.debug" value="on"/>
+  <property name="compiler.generate.no.warnings" value="off"/>
+  <property name="compiler.args" value=""/>
+  <property name="compiler.max.memory" value="128m"/>
+  <patternset id="ignored.files">
+    <exclude name="**/CVS/**"/>
+    <exclude name="**/SCCS/**"/>
+    <exclude name="**/RCS/**"/>
+    <exclude name="**/rcs/**"/>
+    <exclude name="**/.DS_Store/**"/>
+    <exclude name="**/.svn/**"/>
+    <exclude name="**/.pyc/**"/>
+    <exclude name="**/.pyo/**"/>
+    <exclude name="**/*.pyc/**"/>
+    <exclude name="**/*.pyo/**"/>
+    <exclude name="**/.git/**"/>
+    <exclude name="**/*.hprof/**"/>
+    <exclude name="**/_svn/**"/>
+    <exclude name="**/.hg/**"/>
+    <exclude name="**/*.lib/**"/>
+    <exclude name="**/*~/**"/>
+    <exclude name="**/__pycache__/**"/>
+    <exclude name="**/.bundle/**"/>
+    <exclude name="**/*.rbc/**"/>
+    <exclude name="**/vssver.scc/**"/>
+    <exclude name="**/vssver2.scc/**"/>
+  </patternset>
+  <patternset id="library.patterns">
+    <include name="*.war"/>
+    <include name="*.ear"/>
+    <include name="*.apk"/>
+    <include name="*.zip"/>
+    <include name="*.swc"/>
+    <include name="*.egg"/>
+    <include name="*.jar"/>
+  </patternset>
+  <patternset id="compiler.resources">
+    <include name="**/?*.properties"/>
+    <include name="**/?*.xml"/>
+    <include name="**/?*.gif"/>
+    <include name="**/?*.png"/>
+    <include name="**/?*.jpeg"/>
+    <include name="**/?*.jpg"/>
+    <include name="**/?*.html"/>
+    <include name="**/?*.dtd"/>
+    <include name="**/?*.tld"/>
+    <include name="**/?*.ftl"/>
+  </patternset>
+  
+  
+  <!-- Project Libraries -->
+  
+  <path id="library.lib.classpath">
+    <pathelement location="${basedir}/lib/RNAViewR.jar"/>
+    <pathelement location="${basedir}/lib/clear.jar"/>
+    <pathelement location="${basedir}/lib/collapse.jar"/>
+    <pathelement location="${basedir}/lib/commons-logging-1.1.1.jar"/>
+    <pathelement location="${basedir}/lib/crimson.jar"/>
+    <pathelement location="${basedir}/lib/dom4j.jar"/>
+    <pathelement location="${basedir}/lib/gis2.jar"/>
+    <pathelement location="${basedir}/lib/handy.jar"/>
+    <pathelement location="${basedir}/lib/human.jar"/>
+    <pathelement location="${basedir}/lib/ignition.jar"/>
+    <pathelement location="${basedir}/lib/javaGeom-0.9.0.jar"/>
+    <pathelement location="${basedir}/lib/javolution-5.5.1.jar"/>
+    <pathelement location="${basedir}/lib/jaxen-1.1.1.jar"/>
+    <pathelement location="${basedir}/lib/jcommon-1.0.16.jar"/>
+    <pathelement location="${basedir}/lib/jfreechart-1.0.13.jar"/>
+    <pathelement location="${basedir}/lib/jscience-4.3.jar"/>
+    <pathelement location="${basedir}/lib/jsi-1.0b2p1.jar"/>
+    <pathelement location="${basedir}/lib/jts-1.11.jar"/>
+    <pathelement location="${basedir}/lib/junit-4.5.jar"/>
+    <pathelement location="${basedir}/lib/kernel.jar"/>
+    <pathelement location="${basedir}/lib/log4j-1.2.15.jar"/>
+    <pathelement location="${basedir}/lib/maps.jar"/>
+    <pathelement location="${basedir}/lib/misc.jar"/>
+    <pathelement location="${basedir}/lib/rescuecore2.jar"/>
+    <pathelement location="${basedir}/lib/resq-fire.jar"/>
+    <pathelement location="${basedir}/lib/sample.jar"/>
+    <pathelement location="${basedir}/lib/standard.jar"/>
+    <pathelement location="${basedir}/lib/traffic3.jar"/>
+    <pathelement location="${basedir}/lib/trove-0.1.8.jar"/>
+    <pathelement location="${basedir}/lib/uncommons-maths-1.2.jar"/>
+    <pathelement location="${basedir}/lib/xml-0.0.6.jar"/>
+  </path>
+  
+  <!-- Modules -->
+  
+  <import file="${basedir}/module_mrl.xml"/>
+  
+  <target name="init" description="Build initialization">
+    <!-- Perform any build initialization in this target -->
+  </target>
+  
+  <target name="clean" depends="clean.module.mrl, clean.artifact.mrl:jar" description="cleanup all"/>
+  
+  <target name="build.modules" depends="init, clean, compile.module.mrl" description="build all modules"/>
+  
+  <target name="init.artifacts">
+    <property name="artifacts.temp.dir" value="${basedir}/__artifacts_temp"/>
+    <property name="artifact.output.mrl:jar" value="${basedir}/out/artifacts/mrl_jar"/>
+    <mkdir dir="${artifacts.temp.dir}"/>
+    <property name="temp.jar.path.mrl.jar" value="${artifacts.temp.dir}/mrl.jar"/>
+  </target>
+  
+  <target name="clean.artifact.mrl:jar" description="clean mrl:jar artifact output">
+     <!--<delete dir="${artifact.output.mrl:jar}"/>-->
+	<delete dir="${basedir}/out/"/>
+  </target>
+  
+  <target name="artifact.mrl:jar" depends="init.artifacts, compile.module.mrl" description="Build &#39;mrl:jar&#39; artifact">
+    <mkdir dir="${artifact.output.mrl:jar}"/>
+    <jar destfile="${temp.jar.path.mrl.jar}" duplicate="preserve" filesetmanifest="mergewithoutmain">
+      <zipfileset file="${basedir}/src/META-INF/MANIFEST.MF" prefix="META-INF"/>
+      <zipfileset dir="${mrl.output.dir}"/>
+    </jar>
+    <copy file="${temp.jar.path.mrl.jar}" tofile="${artifact.output.mrl:jar}/mrl.jar"/>
+    <copy file="${basedir}/lib/jfreechart-1.0.13.jar" tofile="${artifact.output.mrl:jar}/jfreechart-1.0.13.jar"/>
+    <copy file="${basedir}/lib/junit-4.5.jar" tofile="${artifact.output.mrl:jar}/junit-4.5.jar"/>
+    <copy file="${basedir}/lib/uncommons-maths-1.2.jar" tofile="${artifact.output.mrl:jar}/uncommons-maths-1.2.jar"/>
+    <copy file="${basedir}/lib/xml-0.0.6.jar" tofile="${artifact.output.mrl:jar}/xml-0.0.6.jar"/>
+    <copy file="${basedir}/lib/jaxen-1.1.1.jar" tofile="${artifact.output.mrl:jar}/jaxen-1.1.1.jar"/>
+    <copy file="${basedir}/lib/kernel.jar" tofile="${artifact.output.mrl:jar}/kernel.jar"/>
+    <copy file="${basedir}/lib/commons-logging-1.1.1.jar" tofile="${artifact.output.mrl:jar}/commons-logging-1.1.1.jar"/>
+    <copy file="${basedir}/lib/standard.jar" tofile="${artifact.output.mrl:jar}/standard.jar"/>
+    <copy file="${basedir}/lib/traffic3.jar" tofile="${artifact.output.mrl:jar}/traffic3.jar"/>
+    <copy file="${basedir}/lib/log4j-1.2.15.jar" tofile="${artifact.output.mrl:jar}/log4j-1.2.15.jar"/>
+    <copy file="${basedir}/lib/trove-0.1.8.jar" tofile="${artifact.output.mrl:jar}/trove-0.1.8.jar"/>
+    <copy file="${basedir}/lib/misc.jar" tofile="${artifact.output.mrl:jar}/misc.jar"/>
+    <copy file="${basedir}/lib/jscience-4.3.jar" tofile="${artifact.output.mrl:jar}/jscience-4.3.jar"/>
+    <copy file="${basedir}/lib/human.jar" tofile="${artifact.output.mrl:jar}/human.jar"/>
+    <copy file="${basedir}/lib/clear.jar" tofile="${artifact.output.mrl:jar}/clear.jar"/>
+    <copy file="${basedir}/lib/RNAViewR.jar" tofile="${artifact.output.mrl:jar}/RNAViewR.jar"/>
+    <copy file="${basedir}/lib/dom4j.jar" tofile="${artifact.output.mrl:jar}/dom4j.jar"/>
+    <copy file="${basedir}/lib/jts-1.11.jar" tofile="${artifact.output.mrl:jar}/jts-1.11.jar"/>
+    <copy file="${basedir}/lib/jcommon-1.0.16.jar" tofile="${artifact.output.mrl:jar}/jcommon-1.0.16.jar"/>
+    <copy file="${basedir}/lib/collapse.jar" tofile="${artifact.output.mrl:jar}/collapse.jar"/>
+    <copy file="${basedir}/lib/ignition.jar" tofile="${artifact.output.mrl:jar}/ignition.jar"/>
+    <copy file="${basedir}/lib/maps.jar" tofile="${artifact.output.mrl:jar}/maps.jar"/>
+    <copy file="${basedir}/lib/javolution-5.5.1.jar" tofile="${artifact.output.mrl:jar}/javolution-5.5.1.jar"/>
+    <copy file="${basedir}/lib/handy.jar" tofile="${artifact.output.mrl:jar}/handy.jar"/>
+    <copy file="${basedir}/lib/javaGeom-0.9.0.jar" tofile="${artifact.output.mrl:jar}/javaGeom-0.9.0.jar"/>
+    <copy file="${basedir}/lib/rescuecore2.jar" tofile="${artifact.output.mrl:jar}/rescuecore2.jar"/>
+    <copy file="${basedir}/lib/crimson.jar" tofile="${artifact.output.mrl:jar}/crimson.jar"/>
+    <copy file="${basedir}/lib/sample.jar" tofile="${artifact.output.mrl:jar}/sample.jar"/>
+    <copy file="${basedir}/lib/jsi-1.0b2p1.jar" tofile="${artifact.output.mrl:jar}/jsi-1.0b2p1.jar"/>
+    <copy file="${basedir}/lib/gis2.jar" tofile="${artifact.output.mrl:jar}/gis2.jar"/>
+    <copy file="${basedir}/lib/resq-fire.jar" tofile="${artifact.output.mrl:jar}/resq-fire.jar"/>
+  </target>
+  
+  <target name="build.all.artifacts" depends="artifact.mrl:jar" description="Build all artifacts">
+    
+    <!-- Delete temporary files -->
+    <delete dir="${artifacts.temp.dir}"/>
+	<!--<copy file="${basedir}/start.sh" tofile="${basedir}/out/artifacts/mrl_jar/start.sh"/>
+	<copy file="${basedir}/precompute.sh" tofile="${basedir}/out/artifacts/mrl_jar/precompute.sh"/>-->
+  </target>
+  
+  <target name="all" depends="build.modules, build.all.artifacts" description="build all"/>
+</project>

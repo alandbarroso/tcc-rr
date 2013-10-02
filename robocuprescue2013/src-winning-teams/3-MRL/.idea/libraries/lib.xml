@@ -1,0 +1,39 @@
+<component name="libraryTable">
+  <library name="lib">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/jfreechart-1.0.13.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/junit-4.5.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/uncommons-maths-1.2.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/xml-0.0.6.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/jaxen-1.1.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/kernel.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/commons-logging-1.1.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/standard.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/traffic3.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/log4j-1.2.15.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/trove-0.1.8.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/misc.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/jscience-4.3.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/human.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/clear.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/RNAViewR.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/dom4j.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/jts-1.11.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/jcommon-1.0.16.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/collapse.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/ignition.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/maps.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/javolution-5.5.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/handy.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/javaGeom-0.9.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/rescuecore2.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/crimson.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/sample.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/jsi-1.0b2p1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/gis2.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/resq-fire.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

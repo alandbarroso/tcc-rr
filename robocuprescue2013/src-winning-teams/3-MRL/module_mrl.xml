@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="module_mrl" default="compile.module.mrl">
+  <dirname property="module.mrl.basedir" file="${ant.file.module_mrl}"/>
+  
+  
+  <property name="compiler.args.mrl" value="${compiler.args}"/>
+  
+  <property name="mrl.output.dir" value="${module.mrl.basedir}/out/production/mrl"/>
+  <property name="mrl.testoutput.dir" value="${module.mrl.basedir}/out/test/mrl"/>
+  
+  <path id="mrl.module.bootclasspath">
+    <!-- Paths to be included in compilation bootclasspath -->
+  </path>
+  
+  <path id="mrl.module.production.classpath">
+    <path refid="library.lib.classpath"/>
+  </path>
+  
+  <path id="mrl.runtime.production.module.classpath">
+    <pathelement location="${mrl.output.dir}"/>
+    <path refid="library.lib.classpath"/>
+  </path>
+  
+  <path id="mrl.module.classpath">
+    <pathelement location="${mrl.output.dir}"/>
+    <path refid="library.lib.classpath"/>
+  </path>
+  
+  <path id="mrl.runtime.module.classpath">
+    <pathelement location="${mrl.testoutput.dir}"/>
+    <pathelement location="${mrl.output.dir}"/>
+    <path refid="library.lib.classpath"/>
+  </path>
+  
+  
+  <patternset id="excluded.from.module.mrl">
+    <patternset refid="ignored.files"/>
+  </patternset>
+  
+  <patternset id="excluded.from.compilation.mrl">
+    <patternset refid="excluded.from.module.mrl"/>
+  </patternset>
+  
+  <path id="mrl.module.sourcepath">
+    <dirset dir="${module.mrl.basedir}">
+      <include name="src"/>
+    </dirset>
+  </path>
+  
+  
+  <target name="compile.module.mrl" depends="compile.module.mrl.production,compile.module.mrl.tests" description="Compile module mrl"/>
+  
+  <target name="compile.module.mrl.production" description="Compile module mrl; production classes">
+    <mkdir dir="${mrl.output.dir}"/>
+    <javac destdir="${mrl.output.dir}" debug="${compiler.debug}" nowarn="${compiler.generate.no.warnings}" memorymaximumsize="${compiler.max.memory}" fork="true">
+      <compilerarg line="${compiler.args.mrl}"/>
+      <bootclasspath refid="mrl.module.bootclasspath"/>
+      <classpath refid="mrl.module.production.classpath"/>
+      <src refid="mrl.module.sourcepath"/>
+      <patternset refid="excluded.from.compilation.mrl"/>
+    </javac>
+    
+    <copy todir="${mrl.output.dir}">
+      <fileset dir="${module.mrl.basedir}/src">
+        <patternset refid="compiler.resources"/>
+        <type type="file"/>
+      </fileset>
+    </copy>
+  </target>
+  
+  <target name="compile.module.mrl.tests" depends="compile.module.mrl.production" description="compile module mrl; test classes" unless="skip.tests"/>
+  
+  <target name="clean.module.mrl" description="cleanup module">
+    <delete dir="${mrl.output.dir}"/>
+    <delete dir="${mrl.testoutput.dir}"/>
+  </target>
+</project>
