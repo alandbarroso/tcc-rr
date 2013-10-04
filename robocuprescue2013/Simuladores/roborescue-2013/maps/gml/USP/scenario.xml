@@ -1,17 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <scenario:scenario xmlns:scenario="urn:roborescue:map:scenario">
-  <scenario:refuge scenario:location="5999"/>
-  <scenario:refuge scenario:location="5950"/>
-  <scenario:fire scenario:location="5967"/>
-  <scenario:fire scenario:location="5980"/>
-  <scenario:fire scenario:location="5915"/>
-  <scenario:firestation scenario:location="5944"/>
-  <scenario:ambulancecentre scenario:location="5911"/>
-  <scenario:ambulancecentre scenario:location="5923"/>
+  <scenario:refuge scenario:location="6150"/>
+  <scenario:refuge scenario:location="6188"/>
+  <scenario:refuge scenario:location="6159"/>
+  <scenario:refuge scenario:location="6180"/>
+  <scenario:fire scenario:location="6144"/>
+  <scenario:fire scenario:location="6150"/>
+  <scenario:fire scenario:location="6200"/>
+  <scenario:fire scenario:location="6151"/>
+  <scenario:fire scenario:location="6201"/>
+  <scenario:firestation scenario:location="6189"/>
+  <scenario:firestation scenario:location="6190"/>
+  <scenario:firestation scenario:location="6191"/>
+  <scenario:ambulancecentre scenario:location="6201"/>
+  <scenario:ambulancecentre scenario:location="6137"/>
+  <scenario:gasstation scenario:location="6155"/>
+  <scenario:gasstation scenario:location="6158"/>
   <scenario:civilian scenario:location="6298"/>
   <scenario:civilian scenario:location="6549"/>
   <scenario:civilian scenario:location="6499"/>
+  <scenario:civilian scenario:location="6299"/>
+  <scenario:civilian scenario:location="6550"/>
+  <scenario:civilian scenario:location="6500"/>
+  <scenario:civilian scenario:location="6300"/>
+  <scenario:civilian scenario:location="6551"/>
+  <scenario:civilian scenario:location="6502"/>
+  <scenario:civilian scenario:location="6302"/>
+  <scenario:civilian scenario:location="6552"/>
+  <scenario:civilian scenario:location="6503"/>
   <scenario:firebrigade scenario:location="6840"/>
   <scenario:firebrigade scenario:location="6454"/>
   <scenario:firebrigade scenario:location="6754"/>
@@ -30,4 +47,5 @@
   <scenario:ambulanceteam scenario:location="6523"/>
   <scenario:ambulanceteam scenario:location="6423"/>
   <scenario:ambulanceteam scenario:location="6517"/>
+  <scenario:hydrant scenario:location="6900"/>
 </scenario:scenario>
