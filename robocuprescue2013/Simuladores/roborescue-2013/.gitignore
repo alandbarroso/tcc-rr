@@ -19,3 +19,5 @@ lib/resq-fire.jar
 
 # Ignore .rays files
 *.rays
+
+boot/logs/

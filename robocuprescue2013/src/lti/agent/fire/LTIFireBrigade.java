@@ -10,9 +10,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-
-import com.sun.org.apache.bcel.internal.generic.NEWARRAY;
-
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
 import lti.utils.BuildingPoint;
@@ -359,6 +356,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	}
 	
 	// Not used in the moment => because of ConvexHull
+	@SuppressWarnings("unused")
 	private double getBuildingPriority(EntityID building){
 		int distanceToBuilding; // The distace to the target
 		int nbSafeNeighbours = 0; // The number of neighbours that haven't start burning
