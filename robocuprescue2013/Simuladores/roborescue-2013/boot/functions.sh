@@ -65,7 +65,7 @@ function processArgs {
     LOGDIR="logs"
     MAP="$BASEDIR/maps/gml/test"
     CONFIGDIR="$CONFIGDIR"
-    TEAM=""
+    TEAM="lti"
     TIMESTAMP_LOGS=""
 
     while [[ ! -z "$1" ]]; do
@@ -183,7 +183,7 @@ echo "waiting for clear to connect..."
     xterm -T civilian -e "java -Xmx1024m -cp $CP:$BASEDIR/jars/rescuecore2.jar:$BASEDIR/jars/standard.jar:$BASEDIR/jars/sample.jar:$BASEDIR/jars/kernel.jar rescuecore2.LaunchComponents sample.SampleCivilian*n -c $CONFIGDIR/civilian.cfg $* 2>&1 | tee $LOGDIR/civilian-out.log" &
     PIDS="$PIDS $!"
 sleep 2
-    xterm -T viewer -e "java -Xmx512m -cp $CP:$BASEDIR/jars/rescuecore2.jar:$BASEDIR/jars/standard.jar:$BASEDIR/jars/sample.jar rescuecore2.LaunchComponents sample.SampleViewer -c $CONFIGDIR/viewer.cfg $TEAM_NAME_ARG $* 2>&1 | tee $LOGDIR/viewer-out.log" &
+    xterm -T viewer -e "java -Xmx512m -cp $CP:$BASEDIR/jars/rescuecore2.jar:$BASEDIR/jars/standard.jar:$BASEDIR/jars/sample.jar -Dlog4j.log.dir=logs rescuecore2.LaunchComponents sample.LiveLogExtractor -c $CONFIGDIR/viewer.cfg -h localhost --viewer.output-dir=$LOGDIR $TEAM_NAME_ARG $* 2>&1 | tee $LOGDIR/viewer-out.log" &
     PIDS="$PIDS $!"
 
 
