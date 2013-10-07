@@ -437,7 +437,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		for (EntityID next : blockades) {
 			Blockade block = (Blockade) model.getEntity(next);
 				
-			dist = getSmallestDistanceFromMe(next);
+			dist = getClosestDistanceFromMe(next);
 			repairCost = block.getRepairCost();
 
 			if (dist <= minClearDistance*3/4.0 &&
@@ -692,7 +692,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		return getVisibleEntitiesOfType(StandardEntityURN.BLOCKADE, changed)
 				.contains(blockade)
-				&& getSmallestDistanceFromMe(blockade) < minClearDistance
+				&& getClosestDistanceFromMe(blockade) < minClearDistance
 				&& !stuck;
 	}
 
@@ -710,7 +710,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		for (EntityID next : blockades) {
 			Blockade block = (Blockade) model.getEntity(next);
 				
-			dist = getSmallestDistanceFromMe(next);
+			dist = getClosestDistanceFromMe(next);
 			repairCost = block.getRepairCost();
 
 			if (dist <= minClearDistance) {
@@ -834,7 +834,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				return 0;
 		}
 		
-		thisDistance = getSmallestDistanceFromMe(taskEntity.getID());
+		thisDistance = getClosestDistanceFromMe(taskEntity.getID());
 		samePosition = pos.equals(currentPosition);
 		isInSector = sector.getLocations().keySet().contains(pos);
 		
@@ -990,7 +990,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		return EnumSet.of(StandardEntityURN.POLICE_FORCE);
 	}
 	
-	private int getSmallestDistanceFromMe(EntityID e) {
+	private int getClosestDistanceFromMe(EntityID e) {
 		StandardEntity a = model.getEntity(getID());
         StandardEntity b = model.getEntity(e);
         if (a == null || b == null) {
@@ -1019,11 +1019,34 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
         return minDist;
 	}
 
+	private Pair<Integer, Integer> getDirectionToClosestBlockadeFromMe(Blockade b) {
+        if (!b.isApexesDefined())
+        	return new Pair<Integer, Integer>(b.getX(), b.getY());
+        
+        double dx, dy;
+        int dist, minDist = model.getDistance(getID(), b.getID());
+        int dir_x = b.getX(), dir_y = b.getY();
+        int[] apexList = b.getApexes();
+        for (int i = 0; i < apexList.length; i+=2) {
+        	dx = Math.abs(currentX - apexList[i]);
+            dy = Math.abs(currentY - apexList[i+1]);
+        	dist = (int)Math.hypot(dx, dy);
+        	if (dist < minDist) {
+        		minDist = dist;
+        		dir_x = apexList[i];
+        		dir_y = apexList[i+1];
+        	}
+		}
+        
+        return new Pair<Integer, Integer>(dir_x, dir_y);
+	}
+	
 	private void sendClearArea(int time, EntityID target) {
 		Blockade block = (Blockade) model.getEntity(target);
+		Pair<Integer, Integer> dir = getDirectionToClosestBlockadeFromMe(block);
 
 		long moduloVetorDirecao = minClearDistance;
-		long deltaX = block.getX() - currentX, deltaY = block.getY() - currentY;
+		long deltaX = dir.first() - currentX, deltaY = dir.second() - currentY;
 		double deltaDirecao = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 		double alpha = moduloVetorDirecao / deltaDirecao;
 		int xDestino = currentX + (int) (alpha * deltaX);
