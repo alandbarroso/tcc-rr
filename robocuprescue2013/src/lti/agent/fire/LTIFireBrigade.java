@@ -2,6 +2,8 @@ package lti.agent.fire;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,9 +11,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
+import com.sun.org.apache.bcel.internal.generic.NEWARRAY;
+
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
+import lti.utils.BuildingPoint;
 import lti.utils.EntityIDComparator;
+import lti.utils.GrahamScan;
+import lti.utils.Point2D;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
 import rescuecore2.standard.entities.AmbulanceTeam;
@@ -54,12 +61,16 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	};
 
 	private State state;
+	
+	private DistanceComparator DISTANCE_COMPARATOR;
 
 	@Override
 	protected void postConnect() {
 		super.postConnect();
 		currentX = me().getX();
 		currentY = me().getY();
+		
+		DISTANCE_COMPARATOR = new DistanceComparator(this.getID());
 		
 		Set<EntityID> fireBrigades = new TreeSet<EntityID>(
 				new EntityIDComparator());
@@ -197,13 +208,24 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		}
 
 		if (target != null) {
+			Set<EntityID> targetCluster = getFireCluster(target);
+			if(targetCluster.size() > 1){
+				List<EntityID> convexHull = getConvexHull(targetCluster);
+				
+				for(EntityID id : convexHull){
+					log("Convex Hull contains: " + id);
+				}
+				
+				target = convexHull.get(0);
+			}
+			
 			if (changed.getChangedEntities().contains(target)
 					&& model.getDistance(location().getID(), target) < maxDistance) {
 				sendExtinguish(time, target, maxPower);
 				changeState(State.EXTINGUISHING_FIRE);
 				return;
 			}
-
+			
 			List<EntityID> path = search.breadthFirstSearch(location().getID(), target);
 
 			if (path != null) {
@@ -263,24 +285,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			}
 		}
 
-		// FIXME Avaliar a necessidade deste trecho
-		/*
-		 * if (blocked) { List<EntityID> path =
-		 * search.pathFinder(currentPosition, getBlockedRoads(), target);
-		 * 
-		 * if (path != null) { changeState(State.TAKING_ALTERNATE_ROUTE); } else if
-		 * (state.equals(State.MOVING_TO_FIRE)) { List<EntityID> burning =
-		 * getBurning(); Collections.shuffle(burning, random);
-		 * 
-		 * for (EntityID next : burning) { if (!next.equals(target)) { target =
-		 * next; path = search.breadthFirstSearch(currentPosition, target);
-		 * break; } } } else { Collections.shuffle(refuges, random);
-		 * 
-		 * for (EntityID next : refuges) { if (!next.equals(target)) { target =
-		 * next; path = search.breadthFirstSearch(currentPosition, target);
-		 * break; } } } }
-		 */
-
 		List<EntityID> path = randomWalk();
 		sendMove(time, path);
 		changeState(State.RANDOM_WALKING);
@@ -298,22 +302,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			}
 		}
 		
-		return result;
-	}
-
-	protected List<EntityID> getBurning() {
-		List<EntityID> result = new ArrayList<EntityID>();
-		Collection<StandardEntity> b = model
-				.getEntitiesOfType(StandardEntityURN.BUILDING);
-
-		for (StandardEntity next : b) {
-			if (next instanceof Building) {
-				if (((Building) next).isOnFire()) {
-					result.add(next.getID());
-				}
-			}
-		}
-
 		return result;
 	}
 
@@ -347,25 +335,17 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	
 	@Override
 	protected EntityID selectTask() {
-		double bestPriority = 0;
 		EntityID result = null;
 		
-		// For all the buildings, we should prioritize those close to gas stations because they can explode
-		for (EntityID task : taskTable.keySet()) {
-			if(result != null){
-				double aux = getBuildingPriority(task);
-				if(aux > bestPriority){
-					result = task;
-					bestPriority = aux;
-				}
-			}
-			else{
-				result = task;
-				bestPriority = getBuildingPriority(task);
-			}
-		}
-
-		if (result != null) {
+		List<EntityID> onFireList = new ArrayList<EntityID>(taskTable.keySet());
+		
+		// Get the closest building
+		if(!onFireList.isEmpty()){
+			Collections.sort(onFireList, DISTANCE_COMPARATOR);
+			
+			result = onFireList.get(0);
+			log("Closest building:" + result);
+			
 			for (Set<EntityID> agents : taskTable.values()) {
 				if (agents != null) {
 					agents.remove(me().getID());
@@ -378,6 +358,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		return result;
 	}
 	
+	// Not used in the moment => because of ConvexHull
 	private double getBuildingPriority(EntityID building){
 		int distanceToBuilding; // The distace to the target
 		int nbSafeNeighbours = 0; // The number of neighbours that haven't start burning
@@ -492,7 +473,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 				
 				for(StandardEntity bd : buildings){
 					if(bd instanceof Building){
-						log("Building " + bd.getID() + " distance to gas: " + model.getDistance(gs.getID(), bd.getID()));
 						if(model.getDistance(gs.getID(), bd.getID()) < dangerousDistance){
 							log("Close building! Adding " + bd.getID() + " to neighbours!");
 							result.add(bd.getID());
@@ -512,5 +492,74 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			return true;
 		
 		return false;
+	}
+	
+	
+	// Distance comparator
+	private class DistanceComparator implements Comparator<EntityID>{
+		private EntityID agent;
+		
+		public DistanceComparator(EntityID agent){
+			this.agent = agent;
+		}
+		
+		@Override
+		public int compare(EntityID o1, EntityID o2) {
+			int distance1 = model.getDistance(agent, o1);
+			int distance2 = model.getDistance(agent, o2);
+			
+			if(distance1 < distance2)	return -1;
+			if(distance1 > distance2)	return 1;
+			return 0;
+		}
+		
+	}
+	
+	// Return a cluster of fire => All the buildings close to a building on fire
+	private Set<EntityID> getFireCluster(EntityID onFireBuilding){
+		Set<EntityID> cluster = new HashSet<EntityID>();
+		Set<EntityID> onFire = new HashSet<EntityID>(taskTable.keySet());
+		
+		cluster.add(onFireBuilding);
+		onFire.remove(onFireBuilding);
+		
+		for(EntityID clusterBuilding : cluster){
+			for(EntityID otherBuilding : onFire){
+				if(model.getDistance(clusterBuilding, otherBuilding) < dangerousDistance){
+					cluster.add(otherBuilding);
+				}
+			}
+			
+			onFire.removeAll(cluster);
+		}
+		
+		return cluster;
+	}
+	
+	private List<EntityID> getConvexHull(Set<EntityID> cluster){
+		List<BuildingPoint> points = new ArrayList<BuildingPoint>();
+		
+		for(EntityID buildingID : cluster){
+			Building building = (Building) model.getEntity(buildingID);
+			
+			int[] apexes = building.getApexList();
+			for(int i = 0; i < apexes.length; i = i + 2){
+				points.add(new BuildingPoint(apexes[i], apexes[i+1], buildingID));
+			}
+		}
+		
+		Point2D[] pointArray = new Point2D[points.size()];
+		int i = 0;
+		for(BuildingPoint point : points){
+			pointArray[i] = point;
+			i++;
+		}
+		
+		GrahamScan convexHull = new GrahamScan(pointArray);
+		List<EntityID> convexList = new ArrayList<EntityID>(convexHull.getBuildings());
+		
+		Collections.sort(convexList, DISTANCE_COMPARATOR);
+		
+		return convexList;
 	}
 }
