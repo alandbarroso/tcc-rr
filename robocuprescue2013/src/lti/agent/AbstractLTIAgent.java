@@ -214,6 +214,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		lastX = currentX;
 		lastY = currentY;
 		currentTime = time;	
+		taskDropped = null;
 	}
 
 	/**
@@ -1028,7 +1029,6 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		if (taskDropped != null) {
 			TaskDrop drop = new TaskDrop(taskDropped.getValue());
 			message.addParameter(drop);
-			taskDropped = null;
 
 			/* Se uma tarefa foi escohida, envia-se uma mensagem relatando-a */
 			if (target != null) {
