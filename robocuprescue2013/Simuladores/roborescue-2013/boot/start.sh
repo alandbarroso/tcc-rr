@@ -8,7 +8,7 @@ processArgs $*
 rm -f $LOGDIR/*.log
 
 #startGIS
-startKernel
+startKernel --nomenu
 startSims
 
 echo "Start your agents"
