@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -48,6 +49,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private List<EntityID> gasStationList;
 	private Set<EntityID> gasStationNeighbours;
 	private int dangerousDistance;
+	private Set<EntityID> burntBuildings;
 	
 	private HashMap<Fieryness, Double> fierynessPriority;
 
@@ -102,6 +104,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		gasStationNeighbours = calculateGasStationNeighbours();
 		
 		fierynessPriority = setFierynessPriority();
+		burntBuildings = new HashSet<EntityID>();
 		
 		changeState(State.RANDOM_WALKING);
 	}
@@ -205,7 +208,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		}
 
 		if (target != null) {
-			Set<EntityID> targetCluster = getFireCluster(target);
+			LinkedList<EntityID> targetCluster = getFireCluster(target);
 			if(targetCluster.size() > 1){
 				List<EntityID> convexHull = getConvexHull(targetCluster);
 				
@@ -213,7 +216,13 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 					log("Convex Hull contains: " + id);
 				}
 				
-				target = convexHull.get(0);
+				for (EntityID entityID : convexHull) {
+					target = entityID;
+					if (!((Building)model.getEntity(target)).getFierynessEnum()
+							.equals(StandardEntityConstants.Fieryness.BURNT_OUT))
+						break;
+				}
+				log("Convex Hull - Target from: " + target);
 			}
 			
 			if (changed.getChangedEntities().contains(target)
@@ -313,12 +322,17 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	@Override
 	protected void refreshTaskTable(ChangeSet changed) {
 		Set<EntityID> fires = new HashSet<EntityID>();
+		burntBuildings = new HashSet<EntityID>();
 
 		for (StandardEntity next : model
 				.getEntitiesOfType(StandardEntityURN.BUILDING, StandardEntityURN.GAS_STATION)) {
-			if (((Building) next).isOnFire()) {
+			Building b = (Building) next;
+			if (b.isOnFire())
 				fires.add(next.getID());
-			}
+			if (b.isFierynessDefined()
+					&& b.getFierynessEnum()
+					.equals(StandardEntityConstants.Fieryness.BURNT_OUT))
+				burntBuildings.add(next.getID());
 		}
 
 		taskTable.keySet().retainAll(fires);
@@ -514,27 +528,30 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	}
 	
 	// Return a cluster of fire => All the buildings close to a building on fire
-	private Set<EntityID> getFireCluster(EntityID onFireBuilding){
-		Set<EntityID> cluster = new HashSet<EntityID>();
+	private LinkedList<EntityID> getFireCluster(EntityID onFireBuilding){
+		LinkedList<EntityID> cluster = new LinkedList<EntityID>();
 		Set<EntityID> onFire = new HashSet<EntityID>(taskTable.keySet());
+		onFire.addAll(burntBuildings);
+		for(EntityID bb : onFire)
+			log("Building which is candidate for cluster: " + model.getEntity(bb));
 		
-		cluster.add(onFireBuilding);
+		cluster.addLast(onFireBuilding);
 		onFire.remove(onFireBuilding);
 		
-		for(EntityID clusterBuilding : cluster){
+		for(int i = 0; i < cluster.size(); i++) {
+			EntityID clusterBuilding = cluster.get(i);
 			for(EntityID otherBuilding : onFire){
 				if(model.getDistance(clusterBuilding, otherBuilding) < dangerousDistance){
-					cluster.add(otherBuilding);
+					cluster.addLast(otherBuilding);
 				}
 			}
-			
 			onFire.removeAll(cluster);
 		}
 		
 		return cluster;
 	}
 	
-	private List<EntityID> getConvexHull(Set<EntityID> cluster){
+	private List<EntityID> getConvexHull(LinkedList<EntityID> cluster){
 		List<BuildingPoint> points = new ArrayList<BuildingPoint>();
 		
 		for(EntityID buildingID : cluster){
