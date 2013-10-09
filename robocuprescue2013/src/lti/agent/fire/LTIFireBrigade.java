@@ -532,8 +532,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		LinkedList<EntityID> cluster = new LinkedList<EntityID>();
 		Set<EntityID> onFire = new HashSet<EntityID>(taskTable.keySet());
 		onFire.addAll(burntBuildings);
-		for(EntityID bb : onFire)
-			log("Building which is candidate for cluster: " + model.getEntity(bb));
+		//for(EntityID bb : onFire)
+		//	log("Building which is candidate for cluster: " + model.getEntity(bb));
 		
 		cluster.addLast(onFireBuilding);
 		onFire.remove(onFireBuilding);

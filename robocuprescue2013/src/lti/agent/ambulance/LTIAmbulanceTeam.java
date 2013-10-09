@@ -388,7 +388,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		Human result = null;
 
 		for (EntityID next : taskTable.keySet()) {
-			log(">>> ERRO: " + next + " & " + taskDropped);
 			if (!next.equals(taskDropped)) {
 				Human victim = (Human) model.getEntity(next);
 				int distanceFromAT = model.getDistance(getID(),

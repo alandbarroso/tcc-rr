@@ -1,5 +1,6 @@
 package lti.agent.police;
 
+import java.awt.Polygon;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,6 +21,8 @@ import area.Sector;
 import area.Sectorization;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
+import rescuecore2.misc.geometry.Line2D;
+import rescuecore2.misc.geometry.Vector2D;
 import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.Blockade;
 import rescuecore2.standard.entities.Building;
@@ -38,10 +41,14 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private static final String DISTANCE_KEY = "clear.repair.distance";
 
 	private static final String REPAIR_RATE_KEY = "clear.repair.rate";
+	
+	private static final String REPAIR_RAD_KEY = "clear.repair.rad";
 
 	private int minClearDistance;
 
 	private int repairRate;
+	
+	private int repairRad;
 
 	private Sectorization sectorization;
 	
@@ -73,14 +80,9 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 	private EntityID lastTarget;
 	
-	private EntityID lastObstructingBlockade;
+	//private EntityID lastObstructingBlockade;
 
 	private List<EntityID> path;
-	
-	private boolean enablePreventiveClearing = false;
-	private Set<StandardEntity> preventiveSavedVictims;
-	private boolean amIPreventiveClearing = false;
-	private boolean amIGoingToRefuge = false;
 	
 	private List<EntityID> refuges;
 	
@@ -146,13 +148,13 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 
 		internalID = policeForcesList.indexOf(me().getID()) + 1;
 
-		minClearDistance = config.getIntValue(DISTANCE_KEY);
+		minClearDistance = config.getIntValue(DISTANCE_KEY, 10000);
 
-		repairRate = config.getIntValue(REPAIR_RATE_KEY);
+		repairRate = config.getIntValue(REPAIR_RATE_KEY, 10);
+		
+		repairRad = config.getIntValue(REPAIR_RAD_KEY, 1250);
 
 		obstructingBlockade = null;
-		
-		preventiveSavedVictims = new HashSet<StandardEntity>();
 		
 		clearedPathToVictims = new HashSet<EntityID>();
 	}
@@ -218,10 +220,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				movingToUnblock();
 			return;
 		}
-		
-		if (enablePreventiveClearing)
-			if(treatPreventiveClearing())
-				return;
 
 		// Work on the task, if you have one
 		if (target != null) {
@@ -263,7 +261,8 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 					Edge edge = areaEntity.getEdgeTo(e.getID());
 					int x = (edge.getStartX()+edge.getEndX())/2;
 					int y = (edge.getStartY()+edge.getEndY())/2;
-					moveToTargetIfPathClear(changed, path, x, y);
+					if (moveToTargetIfPathClear(changed, path, x, y))
+						clearedPathToVictims.add(path.get(path.size()-1));
 					return true;
 				}
 			}
@@ -289,7 +288,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 						Edge edge = areaEntity.getEdgeTo(e.getID());
 						int x = (edge.getStartX()+edge.getEndX())/2;
 						int y = (edge.getStartY()+edge.getEndY())/2;
-						clearedPathToVictims.add(path.get(path.size()-1));
 						moveToTargetIfPathClear(changed, path, x, y);
 						return true;
 					}
@@ -318,47 +316,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		log("No path to target: " + target + ", dropping this task");
 		target = null;
 		return false;
-	}
-
-	private boolean treatPreventiveClearing() {
-		boolean executouAcao = false;
-		StandardEntity victimForPreventiveClearing;
-		
-		if (amIPreventiveClearing && target != null) {
-			
-			victimForPreventiveClearing = model.getEntity(target);
-			log("Preventive Clearing: Started for " + victimForPreventiveClearing);
-			if (!amIGoingToRefuge) {
-				EntityID victimLoc = ((Human)victimForPreventiveClearing).getPosition();
-				if (!currentPosition.equals(victimLoc)) {
-					path = search.breadthFirstSearch(currentPosition, victimLoc);
-					log("Preventive Clearing: Going to Victim");						
-				} else {						
-					path = search.breadthFirstSearch(currentPosition, refuges);
-					log("Preventive Clearing: Arrived At Victim");
-					amIGoingToRefuge = true;
-				}
-				sendMove(currentTime, path);
-				executouAcao = true;
-			} else {
-				if (!refuges.contains(currentPosition)) {
-					path = search.breadthFirstSearch(currentPosition, refuges);
-					log("Preventive Clearing: Going to refuge");
-					sendMove(currentTime, path);						
-					executouAcao = true;
-				} else {
-					log("Preventive Clearing: Finished for " + victimForPreventiveClearing);
-					if (!preventiveSavedVictims.contains(victimForPreventiveClearing))
-						preventiveSavedVictims.add(victimForPreventiveClearing);						
-					amIGoingToRefuge = false;
-					target = null;
-					amIPreventiveClearing = false;
-				}
-			}
-
-		}
-		
-		return executouAcao;
 	}
 
 	private void movingToUnblock() {
@@ -407,28 +364,38 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		return path;
 	}
 
-	private void moveIfPathClear(ChangeSet changed, List<EntityID> path) {
-		obstructingBlockade = getPossibleObstructingBlockade(changed, path);
+	private boolean moveIfPathClear(ChangeSet changed, List<EntityID> path) {
+		/*obstructingBlockade = getPossibleObstructingBlockade(changed, path);
 		if (obstructingBlockade != null) {
 			clearObstructingBlockade();
-			return;
+			return false;
+		}*/
+		if (hasObstructingBlockade(path)) {
+			clearPathToNextStep(path);
+			return false;
 		}
 		log("moveIfPathClear: No obstructing blockade to path");
 		log("Path calculated and sent move: " + path);
 		sendMove(currentTime, path);
+		return true;
 	}
 	
-	private void moveToTargetIfPathClear(ChangeSet changed, List<EntityID> path, int x, int y) {
-		obstructingBlockade = getPossibleObstructingBlockade(changed, path);
+	private boolean moveToTargetIfPathClear(ChangeSet changed, List<EntityID> path, int x, int y) {
+		/*obstructingBlockade = getPossibleObstructingBlockade(changed, path);
 		if (obstructingBlockade != null) {
 			clearObstructingBlockade();
-			return;
+			return false;
+		}*/
+		if (hasObstructingBlockade(path)) {
+			clearPathToNextStep(path);
+			return false;
 		}
 		log("moveToTargetIfPathClear: No obstructing blockade to path");
 		moveToTarget(x, y);
+		return true;
 	}
 	
-	private EntityID getPossibleObstructingBlockade(ChangeSet changed, List<EntityID> path) {
+	/*private EntityID getPossibleObstructingBlockade(ChangeSet changed, List<EntityID> path) {
 		int maxRepairCost = 0, dist, repairCost;
 		EntityID result = null;
 		Set<EntityID> blockades = getVisibleEntitiesOfType(
@@ -457,7 +424,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		}
 			
 		return result;
-	}
+	}*/
 
 	private void moveToTarget(int x, int y) {
 		changeState(State.MOVING_TO_TARGET);
@@ -506,6 +473,82 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		lastRepairCost = repairCost;
 		log("Sent clear to remove " + repairRate + "/" + repairCost
 				+ " of the obstructing blockade: " + obstructingBlockade);
+	}
+	
+	private void clearPathToNextStep(List<EntityID> path) {
+		changeState(State.CLEARING_PATH);
+		
+		Area currentArea = (Area) model.getEntity(currentPosition);
+		Edge edge = currentArea.getEdgeTo(path.get(0));
+		if (edge == null) {
+			log("ERRO: Edge vazio");
+			return;
+		}
+		
+		int targetX = (edge.getEndX()+edge.getStartX())/2;
+		int targetY = (edge.getEndY()+edge.getStartY())/2;
+		sendClearArea(currentTime, targetX, targetY);
+		log("Sent clear to remove the obstructing blockade from the path");
+	}
+	
+	private boolean hasObstructingBlockade(List<EntityID> path) {
+		Area currentArea = (Area) model.getEntity(currentPosition);
+		Edge edge = currentArea.getEdgeTo(path.get(0));
+		if (edge == null) {
+			log("ERRO: Edge vazio");
+			return false;
+		}
+		Area nextArea = (Area) model.getEntity(edge.getNeighbour());
+		
+		int targetX = (edge.getEndX()+edge.getStartX())/2;
+		int targetY = (edge.getEndY()+edge.getStartY())/2;
+		int clearLength = (int)(0.7*minClearDistance);
+		java.awt.geom.Area clearArea = getClearArea(me(), targetX, targetY, 90*minClearDistance/100, 90*repairRad/100);
+		
+		Set<EntityID> possibleObstructingBlockades = new HashSet<EntityID>();
+		if (currentArea.getBlockades() != null)
+			possibleObstructingBlockades.addAll(currentArea.getBlockades());
+		if (nextArea.getBlockades() != null)
+			possibleObstructingBlockades.addAll(nextArea.getBlockades());
+		
+		for (EntityID id : possibleObstructingBlockades) {
+			Blockade b = (Blockade) model.getEntity(id);
+			if (clearArea.intersects(b.getShape().getBounds2D()))
+				return true;
+		}
+		
+		return false;
+	}
+	
+	public java.awt.geom.Area getClearArea(Human agent, int targetX, int targetY,
+			int clearLength, int clearRad) {
+		Vector2D agentToTarget = new Vector2D(targetX - agent.getX(), targetY
+				- agent.getY());
+
+		if (agentToTarget.getLength() > clearLength)
+			agentToTarget = agentToTarget.normalised().scale(clearLength);
+
+		Vector2D backAgent = (new Vector2D(agent.getX(), agent.getY()))
+				.add(agentToTarget.normalised().scale(-510));
+		Line2D line = new Line2D(backAgent.getX(), backAgent.getY(),
+				agentToTarget.getX(), agentToTarget.getY());
+
+		Vector2D dir = agentToTarget.normalised().scale(clearRad);
+		Vector2D perpend1 = new Vector2D(-dir.getY(), dir.getX());
+		Vector2D perpend2 = new Vector2D(dir.getY(), -dir.getX());
+
+		rescuecore2.misc.geometry.Point2D points[] = new rescuecore2.misc.geometry.Point2D[] {
+				line.getOrigin().plus(perpend1),
+				line.getEndPoint().plus(perpend1),
+				line.getEndPoint().plus(perpend2),
+				line.getOrigin().plus(perpend2) };
+		int[] xPoints = new int[points.length];
+		int[] yPoints = new int[points.length];
+		for (int i = 0; i < points.length; i++) {
+			xPoints[i] = (int) points[i].getX();
+			yPoints[i] = (int) points[i].getY();
+		}
+		return new java.awt.geom.Area(new Polygon(xPoints, yPoints, points.length));
 	}
 
 	/**
@@ -629,7 +672,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		currentX = me().getX();
 		currentY = me().getY();
 		lastTarget = target;
-		lastObstructingBlockade = obstructingBlockade;
+		//lastObstructingBlockade = obstructingBlockade;
 	}
 
 	protected List<EntityID> randomWalk() {
@@ -749,19 +792,11 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				continue;
 			StandardEntity taskEntity = model.getEntity(next);
 			
-			//Se a tarefa for do tipo human, eh uma vitima
-			if(taskEntity instanceof Human && enablePreventiveClearing) {
-				if (foundVictimToUnblock(taskEntity)) {
-					result = next;
-					break;
-				}
-			} else {
-				importance = calculateImportanceTask(taskEntity);
+			importance = calculateImportanceTask(taskEntity);
 				
-				if (importance > Pb) {
-					result = next;
-					Pb = importance;
-				}
+			if (importance > Pb) {
+				result = next;
+				Pb = importance;
 			}
 		}
 		log("FINAL_SCORE: " + result + " -> " + Pb);
@@ -848,28 +883,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		return importance;
 	}
 
-	private boolean foundVictimToUnblock(StandardEntity taskEntity) {
-		Human humanEntity = (Human) taskEntity;
-		
-		//se o desbloqueio preventivo ainda nao foi feito para essa vitima
-		if (!preventiveSavedVictims.contains(taskEntity)) {
-			//se a vitima encontra-se no meu setor
-			if (sector.getLocations().keySet()
-					.contains(humanEntity.getPosition())) {
-				if (!humanEntity.getID().equals(me().getID())
-						&& humanEntity.isBuriednessDefined()
-						&& humanEntity.getBuriedness() > 0) {
-					amIPreventiveClearing = true;
-					log("Selected task preventive clearing for " + humanEntity);
-					
-					//Escolheu a vitima para desbloqueio preventivo, sai do loop
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
 	@Override
 	protected void refreshWorldModel(ChangeSet changed,
 			Collection<Command> heard) {
@@ -892,28 +905,21 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	protected void refreshTaskTable(ChangeSet changed) {
 		Set<EntityID> remainingIDs = new HashSet<EntityID>();
 		
-		Set<StandardEntity> blockades = addBlockades(remainingIDs);
+		//Set<StandardEntity> blockades = addBlockades(remainingIDs);
 		remainingIDs.addAll(knownVictims);
 		remainingIDs.addAll(refuges);
-		
-		// Descarta as vitimas para quem ja foi feito o desbloqueio preventivo
-		if (enablePreventiveClearing) {
-			addHumans(remainingIDs);
-			for (StandardEntity savedVictim : preventiveSavedVictims)
-				remainingIDs.remove(savedVictim.getID());
-		}
 
 		// Discard blockades and humans that do not exist anymore
 		taskTable.keySet().retainAll(remainingIDs);
 
-		// Add new blockades to the task table
+		/*// Add new blockades to the task table
 		for (StandardEntity blockade : blockades) {
 			Blockade block = (Blockade) blockade;
 			EntityID blockID = block.getID();
 
 			if (!taskTable.containsKey(blockID))
 				taskTable.put(blockID, new HashSet<EntityID>());
-		}
+		}*/
 		
 		// Add new victims to the task table
 		for (EntityID victimID : knownVictims)
@@ -926,7 +932,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 				taskTable.put(ref, new HashSet<EntityID>());
 	}
 
-	private Set<StandardEntity> addBlockades(Set<EntityID> remainingIDs) {
+	/*private Set<StandardEntity> addBlockades(Set<EntityID> remainingIDs) {
 		Set<StandardEntity> blockades = new HashSet<StandardEntity>();
 		blockades.addAll(model.getEntitiesOfType(
 				StandardEntityURN.BLOCKADE
@@ -936,22 +942,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			remainingIDs.add(next.getID());
 		
 		return blockades;
-	}
-
-	private Set<StandardEntity> addHumans(Set<EntityID> remainingIDs) {
-		Set<StandardEntity> humans = new HashSet<StandardEntity>();
-		humans.addAll(model.getEntitiesOfType(
-				StandardEntityURN.CIVILIAN,
-				StandardEntityURN.AMBULANCE_TEAM,
-				StandardEntityURN.POLICE_FORCE,
-				StandardEntityURN.FIRE_BRIGADE
-		));
-		
-		for (StandardEntity next : humans)
-			remainingIDs.add(next.getID());
-		
-		return humans;
-	}
+	}*/
 
 	@Override
 	protected boolean amIBlocked(int time) {
@@ -1018,35 +1009,27 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
         
         return minDist;
 	}
-
-	private Pair<Integer, Integer> getDirectionToClosestBlockadeFromMe(Blockade b) {
-        if (!b.isApexesDefined())
-        	return new Pair<Integer, Integer>(b.getX(), b.getY());
-        
-        double dx, dy;
-        int dist, minDist = model.getDistance(getID(), b.getID());
-        int dir_x = b.getX(), dir_y = b.getY();
-        int[] apexList = b.getApexes();
-        for (int i = 0; i < apexList.length; i+=2) {
-        	dx = Math.abs(currentX - apexList[i]);
-            dy = Math.abs(currentY - apexList[i+1]);
-        	dist = (int)Math.hypot(dx, dy);
-        	if (dist < minDist) {
-        		minDist = dist;
-        		dir_x = apexList[i];
-        		dir_y = apexList[i+1];
-        	}
-		}
-        
-        return new Pair<Integer, Integer>(dir_x, dir_y);
-	}
 	
 	private void sendClearArea(int time, EntityID target) {
-		Blockade block = (Blockade) model.getEntity(target);
-		Pair<Integer, Integer> dir = getDirectionToClosestBlockadeFromMe(block);
+		StandardEntity e = model.getEntity(target);
+		int x = 0, y = 0;
+		if (e instanceof Area) {
+			x = ((Area)e).getX();
+			y = ((Area)e).getY();
+		} else if (e instanceof Blockade) {
+			x = ((Blockade)e).getX();
+			y = ((Blockade)e).getY();
+		} else {
+			log("ERRO: sendClearArea to unknown element");
+			return;
+		}
 
+		sendClear(time, x, y);
+	}
+	
+	private void sendClearArea(int time, int targetX, int targetY) {
 		long moduloVetorDirecao = minClearDistance;
-		long deltaX = dir.first() - currentX, deltaY = dir.second() - currentY;
+		long deltaX = targetX - currentX, deltaY = targetY - currentY;
 		double deltaDirecao = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 		double alpha = moduloVetorDirecao / deltaDirecao;
 		int xDestino = currentX + (int) (alpha * deltaX);
