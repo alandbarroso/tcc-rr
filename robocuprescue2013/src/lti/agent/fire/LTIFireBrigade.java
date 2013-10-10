@@ -139,11 +139,13 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			return;
 		}
 
+		sendMessageAboutPerceptions(changed);
+		
 		if (me().getBuriedness() != 0) {
 			changeState(State.BURIED);
 			return;
 		}
-
+		
 		// Verify if you are blocked
 		if (amIBlocked(time)) {
 			log("Blocked! Random walk to escape");
@@ -157,18 +159,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 		if (target == null) {
 			target = selectTask();
-		}
-
-		// Send a message about all the perceptions
-		Message msg = composeMessage(changed);
-
-		if (this.channelComm) {
-			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
-				for (Pair<Integer,Integer> channel : channelList) {
-					sendSpeak(time, channel.first(),
-							msg.getMessage(channel.second().intValue()));
-				}
-			}
 		}
 
 		// There is no need to stay inside a burning building, right?
@@ -297,6 +287,20 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		return;
 	}
 	
+	private void sendMessageAboutPerceptions(ChangeSet changed) {
+		// Send a message about all the perceptions
+		Message msg = composeMessage(changed);
+
+		if (this.channelComm) {
+			if (!msg.getParameters().isEmpty() && !channelList.isEmpty()) {
+				for (Pair<Integer,Integer> channel : channelList) {
+					sendSpeak(currentTime, channel.first(),
+							msg.getMessage(channel.second().intValue()));
+				}
+			}
+		}
+	}
+	
 	protected List<EntityID> getHydrants(){
 		List<EntityID> result = new ArrayList<EntityID>();
 		Collection<StandardEntity> b = model.
@@ -313,7 +317,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 	@Override
 	protected boolean amIBlocked(int time) {
-		return lastPosition.getValue() == currentPosition.getValue()
+		return math.geom2d.Point2D.distance(lastX, lastY, currentX, currentY) < MIN_WALK_LENGTH
 					&& isMovingState()
 					&& time > 3
 					&& getBlockedRoads().contains(location().getID());

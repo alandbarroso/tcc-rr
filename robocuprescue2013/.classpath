@@ -31,5 +31,6 @@
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/trove-0.1.8.jar"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/uncommons-maths-1.2.jar"/>
 	<classpathentry kind="lib" path="Simuladores/roborescue-2013/lib/xml-0.0.6.jar"/>
+	<classpathentry kind="lib" path="lib/javaGeom-0.11.1.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

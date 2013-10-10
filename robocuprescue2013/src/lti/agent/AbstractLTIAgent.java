@@ -18,7 +18,6 @@ import lti.message.type.BuildingBurnt;
 import lti.message.type.BuildingEntranceCleared;
 import lti.message.type.Fire;
 import lti.message.type.FireExtinguished;
-import lti.message.type.Help;
 import lti.message.type.TaskDrop;
 import lti.message.type.TaskPickup;
 import lti.message.type.Victim;
@@ -52,6 +51,8 @@ import rescuecore2.worldmodel.EntityID;
 
 public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		StandardAgent<E> {
+	
+	protected static final int MIN_WALK_LENGTH = 2000;
 	
 	protected static final int RANDOM_WALK_LENGTH = 5;
 
@@ -131,6 +132,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	protected int maxDistanceTraveledPerCycle = 5000;
 
 	protected Set<EntityID> buildingEntrancesCleared;
+	
+	protected int lastTimeNotBlocked;
 
 	@Override
 	protected void postConnect() {
@@ -139,6 +142,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		lastY = 0;
 		currentTime = 0;
 		internalID = 0;
+		lastTimeNotBlocked = 0;
 
 		model.indexClass(StandardEntityURN.BUILDING);
 
@@ -215,6 +219,9 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		lastY = currentY;
 		currentTime = time;	
 		taskDropped = null;
+		
+		if (!amIBlocked(time))
+			lastTimeNotBlocked = time;
 	}
 
 	/**
@@ -388,8 +395,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	private void readMsg(ChangeSet changed, Command cmd) {
 		Message speakMsg;
 		speakMsg = new Message(((AKSpeak) cmd).getContent());
-		//log("Speak from:" + cmd.getAgentID() + " channel:" +
-		//		((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
+		log("Speak from:" + cmd.getAgentID() + " channel:" +
+				((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
 		for (Parameter param : speakMsg.getParameters()) {
 			switch (param.getOperation()) {
 			case FIRE:
@@ -423,7 +430,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 				readMsgBuildingBurnt(param, changed);
 				break;
 			case HELP_CIVILIAN:
-				readMsgCivilianHeard(param, changed, cmd);
+				//readMsgCivilianHeard(param, changed, cmd);
 				break;
 			case BUILDING_ENTRANCE_CLEARED:
 				readMsgBuildingEntranceCleared(param);
@@ -445,7 +452,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 			buildingEntrancesCleared.add(e);
 	}
 
-	private void readMsgCivilianHeard(Parameter param, ChangeSet changed, Command cmd) {
+	/*private void readMsgCivilianHeard(Parameter param, ChangeSet changed, Command cmd) {
 		if (!(param instanceof Help))
 			return;
 		
@@ -502,7 +509,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 			//knownVictims.add(victimID);
 			//log("in");
 		}
-	}
+	}*/
 
 	/**
 	 * Avalia se algum prédio foi complemente queimado
@@ -849,6 +856,11 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	/** Compõe uma mensagem para ser enviada de acordo com o que o agente vê */
 	protected Message composeMessage(ChangeSet changed, Message message) {
 
+		// Pedir socorro se está bloqueado ou buried
+		if (((Human)me()).getBuriedness() != 0
+				|| (amIBlocked(currentTime) && (currentTime - lastTimeNotBlocked >= 5)))
+			message = addRescueMyselfMessage(message);
+		
 		for (EntityID buildingID : getVisibleEntitiesOfType(
 				StandardEntityURN.BUILDING, changed)) {
 			Building building = (Building) model.getEntity(buildingID);
@@ -897,14 +909,14 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		 */
 		for (EntityID blockadeID : getVisibleEntitiesOfType(
 				StandardEntityURN.BLOCKADE, changed)) {
-			Blockade blockade = (Blockade) model.getEntity(blockadeID);
+			//Blockade blockade = (Blockade) model.getEntity(blockadeID);
 
 			if (!knownBlockades.contains(blockadeID)) {
-				lti.message.type.Blockade block = new lti.message.type.Blockade(
+				/*lti.message.type.Blockade block = new lti.message.type.Blockade(
 						blockadeID.getValue(), blockade.getPosition()
 								.getValue(), blockade.getX(), blockade.getY(),
 						blockade.getRepairCost());
-				message.addParameter(block);
+				message.addParameter(block);*/
 				knownBlockades.add(blockadeID);
 			}
 		}
@@ -917,9 +929,9 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		 */
 		for (EntityID blockadeID : knownBlockades) {
 			if (model.getEntity(blockadeID) == null) {
-				BlockadeCleared cleared = new BlockadeCleared(
+				/*BlockadeCleared cleared = new BlockadeCleared(
 						blockadeID.getValue());
-				message.addParameter(cleared);
+				message.addParameter(cleared);*/
 				toRemove.add(blockadeID);
 			}
 		}
@@ -948,7 +960,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 						victims.add(next);
 
 					} else if (human.isBuriednessDefined()
-							&& human.getBuriedness() != 0) {
+							&& human.getBuriedness() != 0
+							&& nonRefugeBuildings.contains(human.getPosition())) {
 						victims.add(next);
 					}
 				}
@@ -1015,7 +1028,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 					message.addParameter(death);
 					toRemove.add(victim);
 				} else if (human.isBuriednessDefined() &&
-						human.getBuriedness() == 0) {
+						human.getBuriedness() == 0 && human instanceof Civilian) {
 					VictimRescued rescue = new VictimRescued(victim.getValue());
 					message.addParameter(rescue);
 					toRemove.add(victim);
@@ -1042,6 +1055,37 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 			message.addParameter(task);
 		}
 
+		return message;
+	}
+
+	private Message addRescueMyselfMessage(Message message) {
+		Human h = null;
+		int myURN = 0;
+		switch (me().getStandardURN()) {
+			case AMBULANCE_TEAM:
+				h = (AmbulanceTeam) me();
+				myURN = 0;
+				break;
+
+			case FIRE_BRIGADE:
+				h = (FireBrigade) me();
+				myURN = 1;
+				break;
+
+			case POLICE_FORCE:
+				h = (PoliceForce) me();
+				myURN = 2;
+				break;
+
+			default:
+				log("ERRO: Investigar");
+		}
+
+		Victim v = new Victim(h.getID().getValue(), h.getPosition().getValue(),
+				h.getHP(), h.getDamage(), h.getBuriedness(), myURN);
+		message.addParameter(v);
+		
+		log("Pedindo socorro pois estou bloqueado/enterrado e não consigo sair");
 		return message;
 	}
 

@@ -118,8 +118,9 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 			return;
 		}
 
+		sendMessageAboutPerceptions(changed);
+		
 		if (me().getBuriedness() != 0) {
-			sendMessageAboutPerceptions(changed);
 			changeState(State.BURIED);
 			return;
 		}
@@ -135,8 +136,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 			if (movingToUnblock())
 				return;
 		}
-		
-		sendMessageAboutPerceptions(changed);
 		
 		evaluateTaskDroppingAndSelection(changed);
 		
@@ -352,7 +351,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 
 	@Override
 	protected boolean amIBlocked(int time) {
-		return lastPosition.equals(currentPosition) &&
+		return math.geom2d.Point2D.distance(lastX, lastY, currentX, currentY) < MIN_WALK_LENGTH &&
 				isMovingState() &&
 				time > 3;
 	}
