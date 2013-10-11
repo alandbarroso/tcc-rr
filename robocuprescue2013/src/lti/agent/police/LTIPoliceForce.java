@@ -660,7 +660,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			agentToTarget = agentToTarget.normalised().scale(clearLength);
 
 		Vector2D backAgent = (new Vector2D(agent.getX(), agent.getY()))
-				.add(agentToTarget.normalised().scale(-510));
+				.add(agentToTarget.normalised().scale(-110)); // Subtrai 510 - offset (=400)
 		Line2D line = new Line2D(backAgent.getX(), backAgent.getY(),
 				agentToTarget.getX(), agentToTarget.getY());
 

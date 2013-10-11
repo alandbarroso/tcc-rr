@@ -215,8 +215,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 				log("Convex Hull - Target from: " + target);
 			}
 			
-			if (changed.getChangedEntities().contains(target)
-					&& model.getDistance(location().getID(), target) < maxDistance) {
+			if (model.getDistance(location().getID(), target) < maxDistance) {
 				sendExtinguish(time, target, maxPower);
 				changeState(State.EXTINGUISHING_FIRE);
 				return;
