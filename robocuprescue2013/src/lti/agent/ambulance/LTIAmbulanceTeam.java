@@ -111,7 +111,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	@Override
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
-		recalculaVariaveisCiclo();
 
 		if (me().getHP() == 0) {
 			changeState(State.DEAD);
@@ -328,11 +327,6 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		return result;
 	}
 
-	private void recalculaVariaveisCiclo() {
-		currentX = me().getX();
-		currentY = me().getY();
-	}
-
 	/**
 	 * Check if this ambulance is carrying a civilian.
 	 * 
@@ -464,7 +458,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		savability += isPossibleToSave ? 2 : 0;
 		savability += isSamePosition ? 5 : 0;
 		
-		log("SCORE: " + victim + " -> " + savability + " (d:" + totalDistance + ", b:" + b + ", ip:" + isPossibleToSave);
+		//log("SCORE: " + victim + " -> " + savability + " (d:" + totalDistance + ", b:" + b + ", ip:" + isPossibleToSave);
 		return savability;
 	}
 

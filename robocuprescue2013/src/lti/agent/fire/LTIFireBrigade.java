@@ -131,8 +131,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
-		currentX = me().getX();
-		currentY = me().getY();
 
 		if (me().getHP() == 0) {
 			changeState(State.DEAD);
@@ -318,8 +316,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	protected boolean amIBlocked(int time) {
 		return math.geom2d.Point2D.distance(lastX, lastY, currentX, currentY) < MIN_WALK_LENGTH
 					&& isMovingState()
-					&& time > 3
-					&& getBlockedRoads().contains(location().getID());
+					&& time > 3;
 	}
 
 	@Override

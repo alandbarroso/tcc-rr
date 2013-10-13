@@ -135,6 +135,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	
 	protected int lastTimeNotBlocked;
 
+	private boolean hasRequestedToBeSaved;
+
 	@Override
 	protected void postConnect() {
 		super.postConnect();
@@ -143,6 +145,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		currentTime = 0;
 		internalID = 0;
 		lastTimeNotBlocked = 0;
+		hasRequestedToBeSaved = false;
 
 		model.indexClass(StandardEntityURN.BUILDING);
 
@@ -217,6 +220,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		currentPosition = location().getID();
 		lastX = currentX;
 		lastY = currentY;
+		currentX = ((Human)me()).getX();
+		currentY = ((Human)me()).getY();
 		currentTime = time;	
 		taskDropped = null;
 		
@@ -395,8 +400,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	private void readMsg(ChangeSet changed, Command cmd) {
 		Message speakMsg;
 		speakMsg = new Message(((AKSpeak) cmd).getContent());
-		log("Speak from:" + cmd.getAgentID() + " channel:" +
-				((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
+		//log("Speak from:" + cmd.getAgentID() + " channel:" +
+		//		((AKSpeak)cmd).getChannel()  + " - " + speakMsg.toString());
 		for (Parameter param : speakMsg.getParameters()) {
 			switch (param.getOperation()) {
 			case FIRE:
@@ -860,6 +865,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		if (((Human)me()).getBuriedness() != 0
 				|| (amIBlocked(currentTime) && (currentTime - lastTimeNotBlocked >= 5)))
 			message = addRescueMyselfMessage(message);
+		else if (hasRequestedToBeSaved)
+			message = addGotRescuedMessage(message);
 		
 		for (EntityID buildingID : getVisibleEntitiesOfType(
 				StandardEntityURN.BUILDING, changed)) {
@@ -1058,6 +1065,15 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		return message;
 	}
 
+	private Message addGotRescuedMessage(Message message) {
+		VictimRescued rescue = new VictimRescued(me().getID().getValue());
+		message.addParameter(rescue);
+		hasRequestedToBeSaved = false;
+		
+		log("RescueMsg - Avisando que não estou mais bloqueado/enterrado");
+		return message;
+	}
+
 	private Message addRescueMyselfMessage(Message message) {
 		Human h = null;
 		int myURN = 0;
@@ -1084,8 +1100,9 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		Victim v = new Victim(h.getID().getValue(), h.getPosition().getValue(),
 				h.getHP(), h.getDamage(), h.getBuriedness(), myURN);
 		message.addParameter(v);
+		hasRequestedToBeSaved = true;
 		
-		log("Pedindo socorro pois estou bloqueado/enterrado e não consigo sair");
+		log("RescueMsg - Pedindo socorro pois estou bloqueado/enterrado e não consigo sair desde T" + lastTimeNotBlocked);
 		return message;
 	}
 
