@@ -197,21 +197,34 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 		if (target != null) {
 			LinkedList<EntityID> targetCluster = getFireCluster(target);
+			
 			if(targetCluster.size() > 1){
 				List<EntityID> convexHull = getConvexHull(targetCluster);
+				List<EntityID> aux = new ArrayList<EntityID>(convexHull);
 				
 				for(EntityID id : convexHull){
 					log("Convex Hull contains: " + id);
 				}
 				
+				// we then check for the closest building on fire
 				for (EntityID entityID : convexHull) {
-					target = entityID;
-					if (!((Building)model.getEntity(target)).getFierynessEnum()
-							.equals(StandardEntityConstants.Fieryness.BURNT_OUT))
-						break;
+					Building building = (Building) model.getEntity(entityID);
+					Set<EntityID> agents = taskTable.get(entityID);
+					
+					if(building.isFierynessDefined()){
+						if (building.getFierynessEnum().equals(StandardEntityConstants.Fieryness.BURNT_OUT)){
+							aux.remove(entityID);
+						}
+					}
 				}
+				
+				target = aux.get(this.internalID % aux.size());
+				
 				log("Convex Hull - Target from: " + target);
 			}
+			
+			// Once the target is determined, we refresh the tasks
+			this.refreshMyTasks(target);
 			
 			if (model.getDistance(location().getID(), target) < maxDistance) {
 				sendExtinguish(time, target, maxPower);
@@ -324,8 +337,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		Set<EntityID> fires = new HashSet<EntityID>();
 		burntBuildings = new HashSet<EntityID>();
 
-		for (StandardEntity next : model
-				.getEntitiesOfType(StandardEntityURN.BUILDING, StandardEntityURN.GAS_STATION)) {
+		for (StandardEntity next : model.getEntitiesOfType(StandardEntityURN.BUILDING)) {
 			Building b = (Building) next;
 			if (b.isOnFire())
 				fires.add(next.getID());
@@ -356,17 +368,19 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			
 			result = onFireList.get(0);
 			log("Closest building:" + result);
-			
-			for (Set<EntityID> agents : taskTable.values()) {
-				if (agents != null) {
-					agents.remove(me().getID());
-				}
-			}
-
-			taskTable.get(result).add(me().getID());
 		}
 
 		return result;
+	}
+	
+	private void refreshMyTasks(EntityID target){
+		for (Set<EntityID> agents : taskTable.values()) {
+			if (agents != null) {
+				agents.remove(me().getID());
+			}
+		}
+
+		taskTable.get(target).add(me().getID());
 	}
 	
 	// Not used in the moment => because of ConvexHull
@@ -573,7 +587,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		GrahamScan convexHull = new GrahamScan(pointArray);
 		List<EntityID> convexList = new ArrayList<EntityID>(convexHull.getBuildings());
 		
-		Collections.sort(convexList, DISTANCE_COMPARATOR);
+		// Collections.sort(convexList, DISTANCE_COMPARATOR);
 		
 		return convexList;
 	}
