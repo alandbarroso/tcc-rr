@@ -198,6 +198,10 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			return;
 		}
 		
+		if (currentTime >= 100 && (currentTime+2*internalID) % 100 == 0) {
+			clearedPathTo.removeAll(refuges);
+		}
+		
 		if (model.getEntity(currentPosition) instanceof Building) {
 			Building b = (Building)model.getEntity(currentPosition);
 			if (b.isFierynessDefined() && b.isOnFire()) {
@@ -772,7 +776,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	}
 
 	private SimplePolygon2D getBlockadePolygon(Blockade b) {
-		if (!b.isApexesDefined())
+		if (b == null || !b.isApexesDefined())
 			return null;
 		int[] listApexes = b.getApexes();
 		int len = listApexes.length / 2;

@@ -916,14 +916,14 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		 */
 		for (EntityID blockadeID : getVisibleEntitiesOfType(
 				StandardEntityURN.BLOCKADE, changed)) {
-			//Blockade blockade = (Blockade) model.getEntity(blockadeID);
+			Blockade blockade = (Blockade) model.getEntity(blockadeID);
 
 			if (!knownBlockades.contains(blockadeID)) {
-				/*lti.message.type.Blockade block = new lti.message.type.Blockade(
+				lti.message.type.Blockade block = new lti.message.type.Blockade(
 						blockadeID.getValue(), blockade.getPosition()
 								.getValue(), blockade.getX(), blockade.getY(),
 						blockade.getRepairCost());
-				message.addParameter(block);*/
+				message.addParameter(block);
 				knownBlockades.add(blockadeID);
 			}
 		}

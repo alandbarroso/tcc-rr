@@ -209,7 +209,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 				// we then check for the closest building on fire
 				for (EntityID entityID : convexHull) {
 					Building building = (Building) model.getEntity(entityID);
-					Set<EntityID> agents = taskTable.get(entityID);
 					
 					if(building.isFierynessDefined()){
 						if (building.getFierynessEnum().equals(StandardEntityConstants.Fieryness.BURNT_OUT)){
