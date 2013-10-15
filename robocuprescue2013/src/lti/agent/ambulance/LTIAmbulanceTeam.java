@@ -120,6 +120,11 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		sendMessageAboutPerceptions(changed);
 		
 		if (me().getBuriedness() != 0) {
+			if (target != null) {
+				taskDropped = target;
+				target = null;
+				log("Dropped task: " + taskDropped);
+			}
 			changeState(State.BURIED);
 			return;
 		}

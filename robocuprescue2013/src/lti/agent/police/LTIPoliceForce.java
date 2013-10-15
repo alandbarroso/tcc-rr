@@ -79,8 +79,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private State lastState;
 
 	private EntityID lastTarget;
-	
-	//private EntityID lastObstructingBlockade;
 
 	private List<EntityID> path;
 	
@@ -578,11 +576,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	}
 
 	private boolean moveIfPathClear(ChangeSet changed, List<EntityID> path) {
-		/*obstructingBlockade = getPossibleObstructingBlockade(changed, path);
-		if (obstructingBlockade != null) {
-			clearObstructingBlockade();
-			return false;
-		}*/
 		if (hasObstructingBlockade(path)) {
 			clearPathToNextStep(path);
 			return false;
@@ -595,11 +588,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	
 	private boolean moveToTargetIfPathClear(ChangeSet changed, List<EntityID> path,
 			Point2D placeToMove) {
-		/*obstructingBlockade = getPossibleObstructingBlockade(changed, path);
-		if (obstructingBlockade != null) {
-			clearObstructingBlockade();
-			return false;
-		}*/
 		if (hasObstructingBlockade(path)) {
 			clearPathToNextStep(path);
 			return true;
@@ -609,37 +597,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 		moveToTarget((int)placeToMove.x(), (int)placeToMove.y());
 		return true;
 	}
-	
-	/*private EntityID getPossibleObstructingBlockade(ChangeSet changed, List<EntityID> path) {
-		int maxRepairCost = 0, dist, repairCost;
-		EntityID result = null;
-		Set<EntityID> blockades = getVisibleEntitiesOfType(
-				StandardEntityURN.BLOCKADE, changed);
-		
-		for (EntityID next : blockades) {
-			Blockade block = (Blockade) model.getEntity(next);
-				
-			dist = getClosestDistanceFromMe(next);
-			repairCost = block.getRepairCost();
-
-			if (dist <= minClearDistance*3/4.0 &&
-				(path.contains(block.getPosition())
-						|| currentPosition.equals(block.getPosition())) &&
-				repairCost >= maxRepairCost) {
-					result = next;
-					maxRepairCost = repairCost;
-			}
-		}
-		
-		if (state != null && state.equals(lastState)
-				&& result != null && result.equals(lastObstructingBlockade)
-				&& lastRepairCost == maxRepairCost) {
-			log("Last time clearing blockade was ineffective, so need to get closer");
-			return null;
-		}
-			
-		return result;
-	}*/
 
 	private void moveToTarget(int x, int y) {
 		changeState(State.MOVING_TO_TARGET);
@@ -936,7 +893,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private void recalculaVariaveisCiclo() {
 		lastState = this.state;
 		lastTarget = target;
-		//lastObstructingBlockade = obstructingBlockade;
 	}
 
 	protected List<EntityID> randomWalk() {
@@ -1187,21 +1143,11 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	protected void refreshTaskTable(ChangeSet changed) {
 		Set<EntityID> remainingIDs = new HashSet<EntityID>();
 		
-		//Set<StandardEntity> blockades = addBlockades(remainingIDs);
 		remainingIDs.addAll(knownVictims);
 		remainingIDs.addAll(refuges);
 
 		// Discard blockades and humans that do not exist anymore
 		taskTable.keySet().retainAll(remainingIDs);
-
-		/*// Add new blockades to the task table
-		for (StandardEntity blockade : blockades) {
-			Blockade block = (Blockade) blockade;
-			EntityID blockID = block.getID();
-
-			if (!taskTable.containsKey(blockID))
-				taskTable.put(blockID, new HashSet<EntityID>());
-		}*/
 		
 		// Add new victims to the task table
 		for (EntityID victimID : knownVictims)
@@ -1213,18 +1159,6 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			if (!taskTable.containsKey(ref))
 				taskTable.put(ref, new HashSet<EntityID>());
 	}
-
-	/*private Set<StandardEntity> addBlockades(Set<EntityID> remainingIDs) {
-		Set<StandardEntity> blockades = new HashSet<StandardEntity>();
-		blockades.addAll(model.getEntitiesOfType(
-				StandardEntityURN.BLOCKADE
-		));
-		
-		for (StandardEntity next : blockades)
-			remainingIDs.add(next.getID());
-		
-		return blockades;
-	}*/
 
 	@Override
 	protected boolean amIBlocked(int time) {
