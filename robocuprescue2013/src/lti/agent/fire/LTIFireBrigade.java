@@ -50,7 +50,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	
 	private static enum State {
 		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, 
-		MOVING_TO_GAS, MOVING_CLOSE_TO_GAS, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
+		MOVING_TO_GAS, MOVING_CLOSE_TO_GAS, RANDOM_WALKING, 
+		TAKING_ALTERNATE_ROUTE, RESUMING_RANDOM_WALKING,
 		EXTINGUISHING_FIRE, REFILLING, DEAD, BURIED
 	};
 
@@ -166,7 +167,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			return;
 		}
 
-	    //TODO:transitionsBlocked
 		String ss = "";
 		Set<Pair<EntityID, EntityID>> transitionsSet =
 				new HashSet<Pair<EntityID, EntityID>>();
@@ -297,10 +297,21 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 				return;
 			}
 		}
-
-		path = randomWalk();
-		sendMove(time, path);
-		return;
+		
+		if(path != null && !path.isEmpty() && currentPosition.getValue() != path.get(path.size() - 1).getValue()){
+			EntityID pathTarget = path.get(path.size() - 1);
+			
+			changeState(State.RESUMING_RANDOM_WALKING);
+			path = search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, transitionsSet, pathTarget);
+			sendMove(time, path);
+			return;
+		}
+		else{
+			changeState(State.RANDOM_WALKING);
+			path = randomWalk();
+			sendMove(time, path);
+			return;
+		}
 	}
 	
 	private void sendMessageAboutPerceptions(ChangeSet changed) {
@@ -402,6 +413,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		ss.add(State.MOVING_TO_FIRE);
 		ss.add(State.MOVING_TO_REFUGE);
 		ss.add(State.RANDOM_WALKING);
+		ss.add(State.RESUMING_RANDOM_WALKING);
 		ss.add(State.TAKING_ALTERNATE_ROUTE);
 
 		return ss.contains(state);
