@@ -34,6 +34,7 @@ import rescuecore2.misc.geometry.Line2D;
 import rescuecore2.misc.geometry.Point2D;
 import rescuecore2.standard.components.StandardAgent;
 import rescuecore2.standard.entities.AmbulanceTeam;
+import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.Blockade;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.Civilian;
@@ -292,6 +293,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 				break;
 			}
 		}
+		result.remove(0);
 		return result;
 	}
 
@@ -760,6 +762,18 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 		human.setHP(victim.getHP());
 		human.setDamage(victim.getDamage());
 		human.setBuriedness(victim.getBuriedness());
+		if (model.getEntity(human.getPosition()) instanceof Area) {
+			Area a = (Area)model.getEntity(human.getPosition());
+			human.setX(a.getX());
+			human.setY(a.getY());
+		} else if (model.getEntity(human.getPosition()) instanceof Human) {
+			Human h = (Human)model.getEntity(human.getPosition());
+			human.setX(h.getX());
+			human.setY(h.getY());
+		} else {
+			human.undefineX();
+			human.undefineY();
+		}
 
 		model.addEntity(human);
 		knownVictims.add(victimID);

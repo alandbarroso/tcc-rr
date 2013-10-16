@@ -5,6 +5,7 @@
               directory with the processing instruction <?eclipse.ant.import?>
               as the first entry and export the buildfile again. --><project basedir="." default="build" name="robocuprescue2013">
     <property environment="env"/>
+    <property name="ECLIPSE_HOME" value="../../../Documents/eclipse"/>
     <property name="debuglevel" value="source,lines,vars"/>
     <property name="target" value="1.7"/>
     <property name="source" value="1.7"/>
@@ -39,6 +40,7 @@
         <pathelement location="Simuladores/roborescue-2013/lib/trove-0.1.8.jar"/>
         <pathelement location="Simuladores/roborescue-2013/lib/uncommons-maths-1.2.jar"/>
         <pathelement location="Simuladores/roborescue-2013/lib/xml-0.0.6.jar"/>
+        <pathelement location="lib/javaGeom-0.11.1.jar"/>
     </path>
     <target name="init">
         <mkdir dir="bin"/>
@@ -75,15 +77,21 @@
         <property name="build.compiler" value="org.eclipse.jdt.core.JDTCompilerAdapter"/>
         <antcall target="build"/>
     </target>
-    <target name="robocuprescue2013">
+    <target name="LTI_Agents_2013 (DEBUG)">
         <java classname="lti.LaunchLTIAgents" failonerror="true" fork="yes">
-            <arg line="-1 -1 -1 -1 -1 -1 localhost -v -d"/>
+            <arg line="-1 -1 -1 -1 -1 -1 localhost -d"/>
             <classpath refid="robocuprescue2013.classpath"/>
         </java>
     </target>
-    <target name="robocuprescue2013 - without verbose">
+    <target name="LTI_Agents_2013 (NO_OUTPUT)">
         <java classname="lti.LaunchLTIAgents" failonerror="true" fork="yes">
             <arg line="-1 -1 -1 -1 -1 -1 localhost"/>
+            <classpath refid="robocuprescue2013.classpath"/>
+        </java>
+    </target>
+    <target name="LTI_Agents_2013 (VERBOSE INIT)">
+        <java classname="lti.LaunchLTIAgents" failonerror="true" fork="yes">
+            <arg line="-1 -1 -1 -1 -1 -1 localhost -v"/>
             <classpath refid="robocuprescue2013.classpath"/>
         </java>
     </target>

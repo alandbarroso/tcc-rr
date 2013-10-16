@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 import lti.agent.AbstractLTIAgent;
@@ -28,6 +29,7 @@ import rescuecore2.standard.entities.Human;
 import rescuecore2.standard.entities.Hydrant;
 import rescuecore2.standard.entities.PoliceOffice;
 import rescuecore2.standard.entities.Refuge;
+import rescuecore2.standard.entities.Road;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityConstants;
 import rescuecore2.standard.entities.StandardEntityConstants.Fieryness;
@@ -40,6 +42,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private static final String MAX_WATER_KEY = "fire.tank.maximum";
 	private static final String MAX_DISTANCE_KEY = "fire.extinguish.max-distance";
 	private static final String MAX_POWER_KEY = "fire.extinguish.max-sum";
+	private static final int MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS = 15;
 
 	private int maxWater;
 	private int maxDistance;
@@ -50,6 +53,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private Set<EntityID> gasStationNeighbours;
 	private int dangerousDistance;
 	private Set<EntityID> burntBuildings;
+	private List<EntityID> path;
+	private List<Pair<EntityID, EntityID>> transitionsBlocked;
 	
 	private HashMap<Fieryness, Double> fierynessPriority;
 
@@ -105,6 +110,10 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		
 		fierynessPriority = setFierynessPriority();
 		burntBuildings = new HashSet<EntityID>();
+		transitionsBlocked = new ArrayList<Pair<EntityID, EntityID>>(MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS);
+		for (int i = 0; i < MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS; i++) {
+			transitionsBlocked.add(i, null);
+		}
 		
 		changeState(State.RANDOM_WALKING);
 	}
@@ -131,6 +140,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
+		transitionsBlocked.set(currentTime % MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS, null);
 
 		if (me().getHP() == 0) {
 			changeState(State.DEAD);
@@ -147,8 +157,18 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		// Verify if you are blocked
 		if (amIBlocked(time)) {
 			log("Blocked! Random walk to escape");
-			changeState(State.RANDOM_WALKING);
-			List<EntityID> path = randomWalk();
+			if (path != null && path.size() >= 1 &&
+					path.indexOf(currentPosition) < path.size()-1) {
+				int ii = currentTime % MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS;
+				
+				EntityID ee = path.get(0);
+				if (path.indexOf(currentPosition) >= 0)
+					ee = path.get(path.indexOf(currentPosition)+1);
+				
+				transitionsBlocked.set(ii,
+						new Pair<EntityID, EntityID>(currentPosition, ee));
+			}
+			path = randomWalk();
 			sendMove(time, path);
 			return;
 		}
@@ -162,10 +182,9 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		// There is no need to stay inside a burning building, right?
 		if (location() instanceof Building) {
 			if (((Building) location()).isOnFire()) {
-				List<EntityID> path = randomWalk();
+				path = randomWalk();
 
 				sendMove(time, path);
-				changeState(State.RANDOM_WALKING);
 				log("Leaving a burning building");
 				return;
 			}
@@ -179,16 +198,30 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			return;
 		}
 
+	    //TODO:transitionsBlocked
+		String ss = "";
+		Set<Pair<EntityID, EntityID>> transitionsSet =
+				new HashSet<Pair<EntityID, EntityID>>();
+		for (Pair<EntityID, EntityID> transition : transitionsBlocked) {
+			if (transition != null) {
+				transitionsSet.add(transition);
+				ss += transition.first() + "->" + transition.second() + ", ";
+			}
+		}
+		log("transitionsBlocked: " + ss);
+		
 		// Am I out of water?
 		if (me().isWaterDefined() && me().getWater() == 0) {
-			List<EntityID> path = search.breadthFirstSearch(location().getID(),
-					refuges);
+			path = search.breadthFirstSearchAvoidingBlockedRoads(
+				currentPosition,
+				transitionsSet,
+				refuges
+			);
 			changeState(State.MOVING_TO_REFUGE);
 
 			if (path == null) {
 				path = randomWalk();
 				log("Trying to move to refugee, but couldn't find path");
-				changeState(State.RANDOM_WALKING);
 			}
 			target = path.get(path.size() - 1);
 			sendMove(time, path);
@@ -217,38 +250,46 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 					}
 				}
 				
-				target = aux.get(this.internalID % aux.size());
-				
-				log("Convex Hull - Target from: " + target);
-			}
-			
-			// Once the target is determined, we refresh the tasks
-			this.refreshMyTasks(target);
-			
-			if (model.getDistance(location().getID(), target) < maxDistance) {
-				sendExtinguish(time, target, maxPower);
-				changeState(State.EXTINGUISHING_FIRE);
-				return;
-			}
-			
-			List<EntityID> path = search.breadthFirstSearch(location().getID(), target);
-
-			if (path != null) {
-				path.remove(path.size() - 1);
-				sendMove(time, path);
-				
-				if(model.getEntity(target) instanceof GasStation)
-					changeState(State.MOVING_TO_GAS);
-				else if(closeToGas(target))
-					changeState(State.MOVING_CLOSE_TO_GAS);
-				else
-					changeState(State.MOVING_TO_FIRE);
-
-				if (!path.isEmpty()) {
-					target = path.get(path.size() - 1);
+				if (aux.size() >= 1) {
+					target = aux.get(this.internalID % aux.size());
+					
+					log("Convex Hull - Target from: " + target);
 				}
+			}
+			
+			if (target != null) {
+				// Once the target is determined, we refresh the tasks
+				this.refreshMyTasks(target);
+				
+				if (model.getDistance(location().getID(), target) < maxDistance) {
+					sendExtinguish(time, target, maxPower);
+					changeState(State.EXTINGUISHING_FIRE);
+					return;
+				}
+				
+				path = search.breadthFirstSearchAvoidingBlockedRoads(
+					currentPosition,
+					transitionsSet,
+					target
+				);
 
-				return;
+				if (path != null) {
+					path.remove(path.size() - 1);
+					sendMove(time, path);
+					
+					if(model.getEntity(target) instanceof GasStation)
+						changeState(State.MOVING_TO_GAS);
+					else if(closeToGas(target))
+						changeState(State.MOVING_CLOSE_TO_GAS);
+					else
+						changeState(State.MOVING_TO_FIRE);
+
+					if (!path.isEmpty()) {
+						target = path.get(path.size() - 1);
+					}
+
+					return;
+				}
 			}
 		}
 		
@@ -260,14 +301,16 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			// If it is, we search for a refuge
 			if(me().getWater() < 0.5*this.maxWater){
 				log("Finding a refuge");
-				List<EntityID> path = search.breadthFirstSearch(location().getID(),
-						refuges);
+				path = search.breadthFirstSearchAvoidingBlockedRoads(
+					currentPosition,
+					transitionsSet,
+					refuges
+				);
 				changeState(State.MOVING_TO_REFUGE);
 
 				if (path == null) {
 					path = randomWalk();
 					log("Trying to move to refugee, but couldn't find path");
-					changeState(State.RANDOM_WALKING);
 				}
 				target = path.get(path.size() - 1);
 				sendMove(time, path);
@@ -275,14 +318,16 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			}
 			else{
 				log("Finding a hydrant");
-				List<EntityID> path = search.breadthFirstSearch(location().getID(),
-						getHydrants());
+				path = search.breadthFirstSearchAvoidingBlockedRoads(
+						currentPosition,
+						transitionsSet,
+						getHydrants()
+					);
 				changeState(State.MOVING_TO_HYDRANT);
 
 				if (path == null) {
 					path = randomWalk();
 					log("Trying to move to hydrant, but couldn't find path");
-					changeState(State.RANDOM_WALKING);
 				}
 				target = path.get(path.size() - 1);
 				sendMove(time, path);
@@ -290,9 +335,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			}
 		}
 
-		List<EntityID> path = randomWalk();
+		path = randomWalk();
 		sendMove(time, path);
-		changeState(State.RANDOM_WALKING);
 		return;
 	}
 	
@@ -461,12 +505,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			taskDropped = target;
 			target = null;
 		}
-
-		if (amIBlocked(time)) {
-			taskDropped = target;
-			target = null;
-		}
-
 	}
 
 	private boolean isMovingState() {
@@ -589,5 +627,37 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		// Collections.sort(convexList, DISTANCE_COMPARATOR);
 		
 		return convexList;
+	}
+	
+	protected List<EntityID> randomWalk() {
+		List<EntityID> result = new ArrayList<EntityID>();
+		EntityID current = currentPosition;
+		
+		for (int i = 0; i < RANDOM_WALK_LENGTH; ++i) {
+			result.add(current);
+			List<EntityID> possible = new ArrayList<EntityID>();
+
+			for (EntityID next : neighbours.get(current))
+				if (model.getEntity(next) instanceof Road)
+					possible.add(next);
+
+			Collections.shuffle(possible, new Random(me().getID().getValue()
+					+ currentTime));
+			boolean found = false;
+
+			for (EntityID next : possible) {
+				if (!result.contains(next)) {
+					current = next;
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+				break; // We reached a dead-end.
+		}
+
+		result.remove(0); // Remove actual position from path
+		changeState(State.RANDOM_WALKING);
+		return result;
 	}
 }
