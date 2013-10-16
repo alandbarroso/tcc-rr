@@ -20,6 +20,7 @@ import lti.utils.GrahamScan;
 import lti.utils.Point2D;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
+import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.Hydrant;
@@ -503,7 +504,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			result.add(current);
 			List<EntityID> possible = new ArrayList<EntityID>();
 
-			for (EntityID next : neighbours.get(current))
+			Area a = ((Area)model.getEntity(current));
+			for (EntityID next : a.getNeighbours())
 				if (model.getEntity(next) instanceof Road)
 					possible.add(next);
 
@@ -524,6 +526,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 		result.remove(0); // Remove actual position from path
 		changeState(State.RANDOM_WALKING);
+		log("randomWalking: " + result);
 		return result;
 	}
 }

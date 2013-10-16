@@ -55,7 +55,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	
 	protected static final int MIN_WALK_LENGTH = 2000;
 	
-	protected static final int RANDOM_WALK_LENGTH = 5;
+	protected static final int RANDOM_WALK_LENGTH = 20;
 
 	private static final String MAX_SIGHT_KEY = "perception.los.max-distance";
 
