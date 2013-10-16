@@ -69,6 +69,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 	private static final String MAX_CHANNEL_PLATOON = PREFIX_CHANNELS + "max.platoon";
 
 	private static final String MAX_CHANNEL_CENTRE = PREFIX_CHANNELS + "max.centre";
+	
+	protected static final int MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS = 15;
 
 	protected boolean verbose = false;
 	
@@ -272,7 +274,8 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 			List<EntityID> possible = new ArrayList<EntityID>();
 			boolean found = false;
 
-			for (EntityID next : neighbours.get(current)) {
+			Area a = ((Area)model.getEntity(current));
+			for (EntityID next : a.getNeighbours()) {
 				if (!(model.getEntity(next) instanceof Building)) {
 					possible.add(next);
 				}
@@ -294,6 +297,7 @@ public abstract class AbstractLTIAgent<E extends StandardEntity> extends
 			}
 		}
 		result.remove(0);
+		log("Using simple random Walking");
 		return result;
 	}
 

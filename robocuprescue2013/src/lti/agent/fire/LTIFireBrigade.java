@@ -12,6 +12,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 
+import area.Sector;
+import area.Sectorization;
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
 import lti.utils.BuildingPoint;
@@ -20,7 +22,6 @@ import lti.utils.GrahamScan;
 import lti.utils.Point2D;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
-import rescuecore2.standard.entities.Area;
 import rescuecore2.standard.entities.Building;
 import rescuecore2.standard.entities.FireBrigade;
 import rescuecore2.standard.entities.Hydrant;
@@ -37,7 +38,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private static final String MAX_WATER_KEY = "fire.tank.maximum";
 	private static final String MAX_DISTANCE_KEY = "fire.extinguish.max-distance";
 	private static final String MAX_POWER_KEY = "fire.extinguish.max-sum";
-	private static final int MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS = 15;
 
 	private int maxWater;
 	private int maxDistance;
@@ -50,7 +50,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private List<Pair<EntityID, EntityID>> transitionsBlocked;
 	
 	private static enum State {
-		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, 
+		RETURNING_TO_SECTOR, MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, 
 		MOVING_TO_GAS, MOVING_CLOSE_TO_GAS, RANDOM_WALKING, 
 		TAKING_ALTERNATE_ROUTE, RESUMING_RANDOM_WALKING,
 		EXTINGUISHING_FIRE, REFILLING, DEAD, BURIED
@@ -59,6 +59,10 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private State state;
 	
 	private DistanceComparator DISTANCE_COMPARATOR;
+	
+	private Sectorization sectorization;
+	
+	private Sector sector;
 
 	@Override
 	protected void postConnect() {
@@ -100,6 +104,8 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			transitionsBlocked.add(i, null);
 		}
 		
+		defineSectorRelatedVariables();
+		
 		changeState(State.RANDOM_WALKING);
 	}
 
@@ -108,6 +114,21 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		return EnumSet.of(StandardEntityURN.FIRE_BRIGADE);
 	}
 
+	/**
+	 * Define the number of divisions, sectorize the world, print the sectors
+	 * into a file, define the working sector of this instance of the agent and
+	 * keep the list of the sectors that can be used during the simulation as a
+	 * working sector
+	 */
+	private void defineSectorRelatedVariables() {
+		sectorization = new Sectorization(model, neighbours,
+				fireBrigadesList.size(), verbose);
+
+		sector = sectorization.getSector(internalID);
+
+		log("Defined sector: " + sector);
+	}
+	
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
 		transitionsBlocked.set(currentTime % MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS, null);
@@ -168,16 +189,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			return;
 		}
 
-		String ss = "";
-		Set<Pair<EntityID, EntityID>> transitionsSet =
-				new HashSet<Pair<EntityID, EntityID>>();
-		for (Pair<EntityID, EntityID> transition : transitionsBlocked) {
-			if (transition != null) {
-				transitionsSet.add(transition);
-				ss += transition.first() + "->" + transition.second() + ", ";
-			}
-		}
-		log("transitionsBlocked: " + ss);
+		Set<Pair<EntityID, EntityID>> transitionsSet = getTransitionsSet();
 		
 		// Am I out of water?
 		if (me().isWaterDefined() && me().getWater() == 0) {
@@ -302,17 +314,35 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		if(path != null && !path.isEmpty() && currentPosition.getValue() != path.get(path.size() - 1).getValue()){
 			EntityID pathTarget = path.get(path.size() - 1);
 			
-			changeState(State.RESUMING_RANDOM_WALKING);
 			path = search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, transitionsSet, pathTarget);
+			if (path == null) {
+				path = randomWalk();
+				sendMove(time, path);
+				return;
+			}
+			changeState(State.RESUMING_RANDOM_WALKING);
 			sendMove(time, path);
 			return;
 		}
 		else{
-			changeState(State.RANDOM_WALKING);
 			path = randomWalk();
 			sendMove(time, path);
 			return;
 		}
+	}
+
+	private Set<Pair<EntityID, EntityID>> getTransitionsSet() {
+		String ss = "";
+		Set<Pair<EntityID, EntityID>> transitionsSet =
+				new HashSet<Pair<EntityID, EntityID>>();
+		for (Pair<EntityID, EntityID> transition : transitionsBlocked) {
+			if (transition != null) {
+				transitionsSet.add(transition);
+				ss += transition.first() + "->" + transition.second() + ", ";
+			}
+		}
+		log("transitionsBlocked: " + ss);
+		return transitionsSet;
 	}
 	
 	private void sendMessageAboutPerceptions(ChangeSet changed) {
@@ -416,6 +446,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		ss.add(State.RANDOM_WALKING);
 		ss.add(State.RESUMING_RANDOM_WALKING);
 		ss.add(State.TAKING_ALTERNATE_ROUTE);
+		ss.add(State.RETURNING_TO_SECTOR);
 
 		return ss.contains(state);
 	}
@@ -500,12 +531,21 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		List<EntityID> result = new ArrayList<EntityID>();
 		EntityID current = currentPosition;
 		
+		if (!sector.getLocations().keySet().contains(currentPosition)) {
+			List<EntityID> local = new ArrayList<EntityID>(sector
+					.getLocations().keySet());
+			changeState(State.RETURNING_TO_SECTOR);
+			List<EntityID> aux_path = search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, getTransitionsSet(), local);
+			if (aux_path == null)
+				aux_path = super.randomWalk();
+			return aux_path;
+		}
+
 		for (int i = 0; i < RANDOM_WALK_LENGTH; ++i) {
 			result.add(current);
 			List<EntityID> possible = new ArrayList<EntityID>();
 
-			Area a = ((Area)model.getEntity(current));
-			for (EntityID next : a.getNeighbours())
+			for (EntityID next : sector.getNeighbours(current))
 				if (model.getEntity(next) instanceof Road)
 					possible.add(next);
 
@@ -526,7 +566,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 
 		result.remove(0); // Remove actual position from path
 		changeState(State.RANDOM_WALKING);
-		log("randomWalking: " + result);
 		return result;
 	}
 }

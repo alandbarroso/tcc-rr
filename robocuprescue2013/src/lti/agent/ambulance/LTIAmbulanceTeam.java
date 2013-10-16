@@ -6,7 +6,6 @@ package lti.agent.ambulance;
  *   caso de bloqueios.
  */
 
-import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -58,6 +57,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	private Sector sector;
 	
 	private List<EntityID> path;
+	
+	private List<Pair<EntityID, EntityID>> transitionsBlocked;
 
 	@Override
 	protected void postConnect() {
@@ -65,6 +66,11 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		
 		inicializaVariaveis();
 
+		transitionsBlocked = new ArrayList<Pair<EntityID, EntityID>>(MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS);
+		for (int i = 0; i < MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS; i++) {
+			transitionsBlocked.add(i, null);
+		}
+		
 		changeState(State.RANDOM_WALKING);
 	}
 
@@ -111,6 +117,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 	@Override
 	protected void think(int time, ChangeSet changed, Collection<Command> heard) {
 		super.think(time, changed, heard);
+		transitionsBlocked.set(currentTime % MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS, null);
 
 		if (me().getHP() == 0) {
 			changeState(State.DEAD);
@@ -143,6 +150,8 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		
 		evaluateTaskDroppingAndSelection(changed);
 		
+		Set<Pair<EntityID, EntityID>> transitionsSet = getTransitionsSet();
+		
 		// Work on the task, if you have one
 		if (target != null) {
 			// Am I carrying a civilian?
@@ -154,7 +163,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 					return;
 				}
 				// No? I need to get to one, then.
-				path = search.breadthFirstSearch(currentPosition, refuges);
+				path = search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, transitionsSet, refuges);
 				if (path == null)
 					path = randomWalk();
 				changeState(State.MOVING_TO_REFUGE);
@@ -180,7 +189,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 					}
 					return;
 				} else {
-					path = search.breadthFirstSearch(currentPosition, victim.getPosition());
+					path = search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, transitionsSet, victim.getPosition());
 					if (path != null && path.size() > 0) {
 						changeState(State.MOVING_TO_TARGET);
 						sendMove(time, path);
@@ -204,7 +213,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		auxBuildingsToCheck.retainAll(safeBuildings);
 		
 		// We then try to go to the closest building not yet checked
-		path = search.breadthFirstSearch(me().getPosition(), auxBuildingsToCheck);
+		path = search.breadthFirstSearchAvoidingBlockedRoads(me().getPosition(), transitionsSet, auxBuildingsToCheck);
 		
 		// If we find a path, we set it as the next location
 		if(path != null && path.size() > 0){
@@ -220,36 +229,33 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		}
 	}
 
-	private boolean movingToUnblock() {
-		if (target != null && state.equals(State.MOVING_TO_TARGET)) {
-			// Find another task
-			taskDropped = target;
-			target = null;
-			log("Dropped task: " + taskDropped);
-			return false;
-		}
-		
-		if (path != null && path.size() > 0 &&
-				model.getEntity(path.get(0)) instanceof Road) {
-			Rectangle2D rect = ((Road) model.getEntity(path.get(0)))
-					.getShape().getBounds2D();
-			Random rdn = new Random();
-			int x = (int) (rect.getMinX() + rdn.nextDouble()
-					* (rect.getMaxX() - rect.getMinX()));
-			int y = (int) (rect.getMinY() + rdn.nextDouble()
-					* (rect.getMaxY() - rect.getMinY()));
-	
-			if (rect.contains(x, y) && currentTime % 3 == 0) {
-				EntityID e = path.get(0);
-				path = new ArrayList<EntityID>();
-				path.add(e);
-				sendMove(currentTime, path, x, y);
-				changeState(State.MOVING_TO_UNBLOCK);
-				log("Found path: " + path + " and sent move to dest: " + x
-						+ "," + y);
-				return true;
+	private Set<Pair<EntityID, EntityID>> getTransitionsSet() {
+		String ss = "";
+		Set<Pair<EntityID, EntityID>> transitionsSet =
+				new HashSet<Pair<EntityID, EntityID>>();
+		for (Pair<EntityID, EntityID> transition : transitionsBlocked) {
+			if (transition != null) {
+				transitionsSet.add(transition);
+				ss += transition.first() + "->" + transition.second() + ", ";
 			}
 		}
+		log("transitionsBlocked: " + ss);
+		return transitionsSet;
+	}
+	
+	private boolean movingToUnblock() {
+		if (path != null && path.size() >= 1 &&
+				path.indexOf(currentPosition) < path.size()-1) {
+			int ii = currentTime % MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS;
+			
+			EntityID ee = path.get(0);
+			if (path.indexOf(currentPosition) >= 0)
+				ee = path.get(path.indexOf(currentPosition)+1);
+			
+			transitionsBlocked.set(ii,
+					new Pair<EntityID, EntityID>(currentPosition, ee));
+		}
+		
 		path = randomWalk();
 		if (path != null && path.size() > 0) {
 			sendMove(currentTime, path);
@@ -301,7 +307,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 			List<EntityID> local = new ArrayList<EntityID>(sector
 					.getLocations().keySet());
 			changeState(State.RETURNING_TO_SECTOR);
-			return search.breadthFirstSearch(currentPosition, local);
+			return search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, getTransitionsSet(), local);
 		}
 
 		for (int i = 0; i < RANDOM_WALK_LENGTH; ++i) {
