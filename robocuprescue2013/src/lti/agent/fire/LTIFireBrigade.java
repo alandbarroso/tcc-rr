@@ -5,13 +5,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+
 import lti.agent.AbstractLTIAgent;
 import lti.message.Message;
 import lti.utils.BuildingPoint;
@@ -20,19 +20,13 @@ import lti.utils.GrahamScan;
 import lti.utils.Point2D;
 import rescuecore2.messages.Command;
 import rescuecore2.misc.Pair;
-import rescuecore2.standard.entities.AmbulanceTeam;
 import rescuecore2.standard.entities.Building;
-import rescuecore2.standard.entities.Civilian;
 import rescuecore2.standard.entities.FireBrigade;
-import rescuecore2.standard.entities.GasStation;
-import rescuecore2.standard.entities.Human;
 import rescuecore2.standard.entities.Hydrant;
-import rescuecore2.standard.entities.PoliceOffice;
 import rescuecore2.standard.entities.Refuge;
 import rescuecore2.standard.entities.Road;
 import rescuecore2.standard.entities.StandardEntity;
 import rescuecore2.standard.entities.StandardEntityConstants;
-import rescuecore2.standard.entities.StandardEntityConstants.Fieryness;
 import rescuecore2.standard.entities.StandardEntityURN;
 import rescuecore2.worldmodel.ChangeSet;
 import rescuecore2.worldmodel.EntityID;
@@ -49,15 +43,11 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private int maxPower;
 	private List<EntityID> refuges;
 	private List<EntityID> fireBrigadesList;
-	private List<EntityID> gasStationList;
-	private Set<EntityID> gasStationNeighbours;
 	private int dangerousDistance;
 	private Set<EntityID> burntBuildings;
 	private List<EntityID> path;
 	private List<Pair<EntityID, EntityID>> transitionsBlocked;
 	
-	private HashMap<Fieryness, Double> fierynessPriority;
-
 	private static enum State {
 		MOVING_TO_REFUGE, MOVING_TO_HYDRANT, MOVING_TO_FIRE, 
 		MOVING_TO_GAS, MOVING_CLOSE_TO_GAS, RANDOM_WALKING, TAKING_ALTERNATE_ROUTE,
@@ -102,13 +92,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		
 		dangerousDistance = 25000;
 		
-		gasStationList = new ArrayList<EntityID>();
-		for(StandardEntity next : model.getEntitiesOfType(StandardEntityURN.GAS_STATION))
-			gasStationList.add(next.getID());
-		
-		gasStationNeighbours = calculateGasStationNeighbours();
-		
-		fierynessPriority = setFierynessPriority();
 		burntBuildings = new HashSet<EntityID>();
 		transitionsBlocked = new ArrayList<Pair<EntityID, EntityID>>(MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS);
 		for (int i = 0; i < MAX_TIMESTEPS_TO_KEEP_BLOCKED_PATHS; i++) {
@@ -116,21 +99,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		}
 		
 		changeState(State.RANDOM_WALKING);
-	}
-
-	private HashMap<Fieryness, Double> setFierynessPriority() {
-		HashMap<Fieryness, Double> fP = new HashMap<Fieryness, Double>();
-		fP.put(StandardEntityConstants.Fieryness.UNBURNT, 0.0);
-		fP.put(StandardEntityConstants.Fieryness.WATER_DAMAGE, 0.0);
-		fP.put(StandardEntityConstants.Fieryness.HEATING, 0.3);
-		fP.put(StandardEntityConstants.Fieryness.BURNING, 0.8);
-		fP.put(StandardEntityConstants.Fieryness.INFERNO, 0.7);
-		fP.put(StandardEntityConstants.Fieryness.MINOR_DAMAGE, 0.0);
-		fP.put(StandardEntityConstants.Fieryness.MODERATE_DAMAGE, 0.0);
-		fP.put(StandardEntityConstants.Fieryness.SEVERE_DAMAGE, 0.0);
-		fP.put(StandardEntityConstants.Fieryness.BURNT_OUT, 0.0);
-		
-		return fP;
 	}
 
 	@Override
@@ -277,12 +245,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 					path.remove(path.size() - 1);
 					sendMove(time, path);
 					
-					if(model.getEntity(target) instanceof GasStation)
-						changeState(State.MOVING_TO_GAS);
-					else if(closeToGas(target))
-						changeState(State.MOVING_CLOSE_TO_GAS);
-					else
-						changeState(State.MOVING_TO_FIRE);
+					changeState(State.MOVING_TO_FIRE);
 
 					if (!path.isEmpty()) {
 						target = path.get(path.size() - 1);
@@ -426,79 +389,6 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		taskTable.get(target).add(me().getID());
 	}
 	
-	// Not used in the moment => because of ConvexHull
-	@SuppressWarnings("unused")
-	private double getBuildingPriority(EntityID building){
-		int distanceToBuilding; // The distace to the target
-		int nbSafeNeighbours = 0; // The number of neighbours that haven't start burning
-		boolean presenceOfCivilians = false;
-		boolean presenceOfAgents = false;
-		boolean closeToGas = false;
-		boolean nearGas = false;
-		boolean isGasStation = false;
-		
-		double result;
-		
-		Collection<StandardEntity> buildings = model.getEntitiesOfType(StandardEntityURN.BUILDING);
-		Collection<StandardEntity> people = model.getEntitiesOfType(StandardEntityURN.AMBULANCE_TEAM,
-																StandardEntityURN.FIRE_BRIGADE,
-																StandardEntityURN.POLICE_FORCE,
-																StandardEntityURN.CIVILIAN);
-		
-		distanceToBuilding = model.getDistance(me().getID(), building);
-		
-		for(StandardEntity bd : buildings){
-			if(bd instanceof Building){
-				// If it is in a dangerous distance, that may allow the fire to spread
-				// And it's not on fire then give high priority
-				if(model.getDistance(building, bd.getID()) < dangerousDistance && !((Building) bd).isOnFire()){
-						nbSafeNeighbours++;
-				}
-				if(gasStationNeighbours.contains(bd.getID())){
-					closeToGas = true;
-				}
-			}
-		}
-		
-		for(StandardEntity person : people){
-			// We get only buildings that have alive humans
-			if(((Human) person).isHPDefined() && ((Human) person).getHP() > 0){
-				// We check if it's a Ambulance, Fire Brigade or Police Force
-				if(person instanceof AmbulanceTeam || person instanceof FireBrigade || person instanceof PoliceOffice){
-					presenceOfAgents = true;
-				}
-				// We check if there are civilians in the building
-				if(person instanceof Civilian){
-					presenceOfCivilians = true;
-				}
-			}
-		}
-		
-		if(gasStationNeighbours.contains(building)){
-			nearGas = true;
-		}
-		
-		if(gasStationList.contains(building)){
-			isGasStation = true;
-		}
-		
-		result = 0;
-		if (distanceToBuilding >= 0){
-			result -= distanceToBuilding/maxDistance*maxPower;
-		}
-		result += nbSafeNeighbours/2*maxPower;
-		result += closeToGas ? 3*maxPower : 0;
-		result += nearGas ? 5*maxPower : 0;
-		result += isGasStation ? 10*maxPower : 0;
-		result += presenceOfAgents ? 2*maxPower : 0;
-		result += presenceOfCivilians ? maxPower : 0;
-		if(((Building) model.getEntity(building)).isFierynessDefined()){
-			result += fierynessPriority.get(((Building) model.getEntity(building)).getFierynessEnum())*maxPower;
-		}
-		
-		return result;
-	}
-
 	@Override
 	protected void dropTask(int time, ChangeSet changed) {
 		if (!taskTable.containsKey(target)) {
@@ -520,43 +410,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private void changeState(State state) {
 		this.state = state;
 		log("Changed state to: " + this.state);
-	}
-	
-	// Used to calculate all the buildings near gas stations
-	private Set<EntityID> calculateGasStationNeighbours(){
-		Set<EntityID> result = new HashSet<EntityID>();
-		
-		Collection<StandardEntity> gasStations = model.
-				getEntitiesOfType(StandardEntityURN.GAS_STATION); // Getting the list of Gas Stations
-		Collection<StandardEntity> buildings = model.
-				getEntitiesOfType(StandardEntityURN.BUILDING); // Getting the list of buildings
-		for(StandardEntity gs : gasStations){
-			if(gs instanceof GasStation){
-				log("GasStation: " + gs.getID());
-				
-				for(StandardEntity bd : buildings){
-					if(bd instanceof Building){
-						if(model.getDistance(gs.getID(), bd.getID()) < dangerousDistance){
-							log("Close building! Adding " + bd.getID() + " to neighbours!");
-							result.add(bd.getID());
-						}
-					}
-				}
-			}
-		}
-
-		
-		return result;
-	}
-	
-	// Verify if is a building is close to a gas station
-	private boolean closeToGas(EntityID ent){
-		if(gasStationNeighbours.contains(ent))
-			return true;
-		
-		return false;
-	}
-	
+	}	
 	
 	// Distance comparator
 	private class DistanceComparator implements Comparator<EntityID>{
