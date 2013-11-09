@@ -22,6 +22,7 @@ import rescuecore2.worldmodel.EntityID;
 
 public class Search {
 	private Map<EntityID, Set<EntityID>> graph;
+	private StandardWorldModel model;
 
 	/**
 	 * Construct a new SampleSearch.
@@ -30,6 +31,8 @@ public class Search {
 	 *            The world model to construct the neighbourhood graph from.
 	 */
 	public Search(StandardWorldModel world) {
+		this.model = world;
+		
 		Map<EntityID, Set<EntityID>> neighbours = new LazyMap<EntityID, Set<EntityID>>() {
 			@Override
 			public Set<EntityID> createValue() {
@@ -91,11 +94,22 @@ public class Search {
 		return breadthFirstSearch(start, Arrays.asList(goals));
 	}
 	
+	public List<EntityID> aStarSearch(EntityID start, EntityID... goals) {
+		return aStarSearch(start, Arrays.asList(goals));
+	}
+	
 	public List<EntityID> breadthFirstSearchAvoidingBlockedRoads(
 			EntityID start,
 			Set<Pair<EntityID, EntityID>> transitionsBlocked,
 			EntityID... goals) {
 		return breadthFirstSearchAvoidingBlockedRoads(start, transitionsBlocked, Arrays.asList(goals));
+	}
+	
+	public List<EntityID> aStarSearchAvoidingBlockedRoads(
+			EntityID start,
+			Set<Pair<EntityID, EntityID>> transitionsBlocked,
+			EntityID... goals) {
+		return aStarSearchAvoidingBlockedRoads(start, transitionsBlocked, Arrays.asList(goals));
 	}
 
 	/**
@@ -160,6 +174,91 @@ public class Search {
 		return path;
 	}
 	
+	public List<EntityID> aStarSearch(EntityID start, Collection<EntityID> goals){
+		List<AStarEntityWrapper> open = new LinkedList<AStarEntityWrapper>();
+		Map<EntityID, EntityID> ancestors = new HashMap<EntityID, EntityID>();
+		
+		open.add(new AStarEntityWrapper(start, goals));
+		ancestors.put(start, start);
+		
+		AStarEntityWrapper current = null;
+		boolean found = false;
+		
+		do {
+			current = open.remove(0);
+			if (isGoal(current.id, goals)) {
+				found = true;
+				break;
+			}
+			List<EntityID> neighbours = new ArrayList<EntityID>(graph.get(current));
+			Collections.shuffle(neighbours);
+			if (neighbours.isEmpty()) {
+				continue;
+			}
+			for (EntityID neighbour : neighbours) {
+				if (!ancestors.containsKey(neighbour)) {
+					AStarEntityWrapper next = new AStarEntityWrapper(neighbour, current, goals);
+					
+					int index;
+					for(index = 0; next.heuristic + next.pathCost >= open.get(index).heuristic + open.get(index).pathCost; index++);
+					
+					open.add(index, next);
+					ancestors.put(neighbour, current.id);
+				}
+			}
+		} while (!found && !open.isEmpty());
+		
+		if (!found) {
+			// No path
+			return null;
+		}
+		
+		// Walk back from goal to start
+		EntityID pathEntity = current.id;
+		List<EntityID> path = new LinkedList<EntityID>();
+		do {
+			path.add(0, pathEntity);
+			pathEntity = ancestors.get(pathEntity);
+			if (current == null) {
+				throw new RuntimeException(
+						"Found a node with no ancestor! Something is broken.");
+			}
+		} while (pathEntity != start);
+		
+		return path;
+	}
+	
+	public class AStarEntityWrapper{
+		public EntityID id;
+		public Integer heuristic;
+		public Integer pathCost;
+		
+		public AStarEntityWrapper(EntityID next, Collection<EntityID> goals){
+			this.id = next;
+			this.pathCost = 0;
+			this.getHeuristic(goals);
+		}
+		
+		public AStarEntityWrapper(EntityID next, AStarEntityWrapper current, Collection<EntityID> goals){
+			this.id = next;
+			this.pathCost = current.pathCost + model.getDistance(next, current.id);
+			this.getHeuristic(goals);
+		}
+		
+		private void getHeuristic(Collection<EntityID> goals)
+		{
+			this.heuristic = Integer.MAX_VALUE;
+			
+			for(EntityID id : goals){
+				Integer aux = model.getDistance(this.id, id);
+				if(aux < this.heuristic)
+				{
+					this.heuristic = aux;
+				}
+			}
+		}
+	}
+	
 	public List<EntityID> breadthFirstSearchAvoidingBlockedRoads(
 			EntityID start,
 			Set<Pair<EntityID, EntityID>> transitionsBlocked,
@@ -213,6 +312,65 @@ public class Search {
 						"Found a node with no ancestor! Something is broken.");
 			}
 		} while (current != start);
+		return path;
+	}
+	
+	public List<EntityID> aStarSearchAvoidingBlockedRoads(
+			EntityID start,
+			Set<Pair<EntityID, EntityID>> transitionsBlocked,
+			Collection<EntityID> goals){
+		List<AStarEntityWrapper> open = new LinkedList<AStarEntityWrapper>();
+		Map<EntityID, EntityID> ancestors = new HashMap<EntityID, EntityID>();
+		
+		open.add(new AStarEntityWrapper(start, goals));
+		ancestors.put(start, start);
+		
+		AStarEntityWrapper current = null;
+		boolean found = false;
+		
+		do {
+			current = open.remove(0);
+			if (isGoal(current.id, goals)) {
+				found = true;
+				break;
+			}
+			List<EntityID> neighbours = new ArrayList<EntityID>(graph.get(current));
+			Collections.shuffle(neighbours);
+			if (neighbours.isEmpty()) {
+				continue;
+			}
+			for (EntityID neighbour : neighbours) {
+				Pair<EntityID, EntityID> pair =
+						new Pair<EntityID, EntityID>(current.id, neighbour);
+				if (!ancestors.containsKey(neighbour) && !transitionsBlocked.contains(pair)) {
+					AStarEntityWrapper next = new AStarEntityWrapper(neighbour, current, goals);
+					
+					int index;
+					for(index = 0; next.heuristic + next.pathCost >= open.get(index).heuristic + open.get(index).pathCost; index++);
+					
+					open.add(index, next);
+					ancestors.put(neighbour, current.id);
+				}
+			}
+		} while (!found && !open.isEmpty());
+		
+		if (!found) {
+			// No path
+			return null;
+		}
+		
+		// Walk back from goal to start
+		EntityID pathEntity = current.id;
+		List<EntityID> path = new LinkedList<EntityID>();
+		do {
+			path.add(0, pathEntity);
+			pathEntity = ancestors.get(pathEntity);
+			if (current == null) {
+				throw new RuntimeException(
+						"Found a node with no ancestor! Something is broken.");
+			}
+		} while (pathEntity != start);
+		
 		return path;
 	}
 
