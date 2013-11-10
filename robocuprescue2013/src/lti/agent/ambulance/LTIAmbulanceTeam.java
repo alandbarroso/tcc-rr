@@ -163,7 +163,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 					return;
 				}
 				// No? I need to get to one, then.
-				path = search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, transitionsSet, refuges);
+				path = search.aStarSearchAvoidingBlockedRoads(currentPosition, transitionsSet, refuges);
 				if (path == null)
 					path = randomWalk();
 				changeState(State.MOVING_TO_REFUGE);
@@ -189,7 +189,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 					}
 					return;
 				} else {
-					path = search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, transitionsSet, victim.getPosition());
+					path = search.aStarSearchAvoidingBlockedRoads(currentPosition, transitionsSet, victim.getPosition());
 					if (path != null && path.size() > 0) {
 						changeState(State.MOVING_TO_TARGET);
 						sendMove(time, path);
@@ -213,7 +213,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 		auxBuildingsToCheck.retainAll(safeBuildings);
 		
 		// We then try to go to the closest building not yet checked
-		path = search.breadthFirstSearchAvoidingBlockedRoads(me().getPosition(), transitionsSet, auxBuildingsToCheck);
+		path = search.aStarSearchAvoidingBlockedRoads(me().getPosition(), transitionsSet, auxBuildingsToCheck);
 		
 		// If we find a path, we set it as the next location
 		if(path != null && path.size() > 0){
@@ -307,7 +307,7 @@ public class LTIAmbulanceTeam extends AbstractLTIAgent<AmbulanceTeam> {
 			List<EntityID> local = new ArrayList<EntityID>(sector
 					.getLocations().keySet());
 			changeState(State.RETURNING_TO_SECTOR);
-			return search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, getTransitionsSet(), local);
+			return search.aStarSearchAvoidingBlockedRoads(currentPosition, getTransitionsSet(), local);
 		}
 
 		for (int i = 0; i < RANDOM_WALK_LENGTH; ++i) {

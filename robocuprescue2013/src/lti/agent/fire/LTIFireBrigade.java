@@ -195,7 +195,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		
 		// Am I out of water?
 		if (me().isWaterDefined() && me().getWater() == 0) {
-			path = search.breadthFirstSearchAvoidingBlockedRoads(
+			path = search.aStarSearchAvoidingBlockedRoads(
 				currentPosition,
 				transitionsSet,
 				refuges
@@ -256,7 +256,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 					}
 				}
 				
-				path = search.breadthFirstSearchAvoidingBlockedRoads(
+				path = search.aStarSearchAvoidingBlockedRoads(
 					currentPosition,
 					transitionsSet,
 					target
@@ -285,7 +285,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			// If it is, we search for a refuge
 			if(me().getWater() < 0.5*this.maxWater){
 				log("Finding a refuge");
-				path = search.breadthFirstSearchAvoidingBlockedRoads(
+				path = search.aStarSearchAvoidingBlockedRoads(
 					currentPosition,
 					transitionsSet,
 					refuges
@@ -302,7 +302,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			}
 			else{
 				log("Finding a hydrant");
-				path = search.breadthFirstSearchAvoidingBlockedRoads(
+				path = search.aStarSearchAvoidingBlockedRoads(
 						currentPosition,
 						transitionsSet,
 						getHydrants()
@@ -322,7 +322,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 		if(path != null && !path.isEmpty() && currentPosition.getValue() != path.get(path.size() - 1).getValue()){
 			EntityID pathTarget = path.get(path.size() - 1);
 			
-			path = search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, transitionsSet, pathTarget);
+			path = search.aStarSearchAvoidingBlockedRoads(currentPosition, transitionsSet, pathTarget);
 			if (path == null) {
 				path = randomWalk();
 				sendMove(time, path);
@@ -544,7 +544,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			List<EntityID> local = new ArrayList<EntityID>(sector
 					.getLocations().keySet());
 			changeState(State.RETURNING_TO_SECTOR);
-			List<EntityID> aux_path = search.breadthFirstSearchAvoidingBlockedRoads(currentPosition, getTransitionsSet(), local);
+			List<EntityID> aux_path = search.aStarSearchAvoidingBlockedRoads(currentPosition, getTransitionsSet(), local);
 			if (aux_path == null)
 				aux_path = super.randomWalk();
 			return aux_path;

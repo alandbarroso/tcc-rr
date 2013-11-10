@@ -598,7 +598,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	private List<EntityID> getPathToEntranceTarget() {
 		List<EntityID> path;
 
-		path = search.breadthFirstSearch(currentPosition,
+		path = search.aStarSearch(currentPosition,
 				buildingEntrancesToBeCleared);
 		
 		if (path != null && path.size() > 0)
@@ -650,7 +650,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 	 * @param targetPositions
 	 */
 	private List<EntityID> getPathToTarget(Collection<EntityID> targetPositions) {
-		return search.breadthFirstSearch(currentPosition, targetPositions);
+		return search.aStarSearch(currentPosition, targetPositions);
 	}
 
 	/**
@@ -960,7 +960,7 @@ public class LTIPoliceForce extends AbstractLTIAgent<PoliceForce> {
 			List<EntityID> local = new ArrayList<EntityID>(sector
 					.getLocations().keySet());
 			changeState(State.RETURNING_TO_SECTOR);
-			return search.breadthFirstSearch(currentPosition, local);
+			return search.aStarSearch(currentPosition, local);
 		}
 
 		for (int i = 0; i < RANDOM_WALK_LENGTH; ++i) {
