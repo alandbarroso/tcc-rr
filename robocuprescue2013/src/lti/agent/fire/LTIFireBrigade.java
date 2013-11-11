@@ -243,7 +243,7 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 			if (target != null) {
 				// Once the target is determined, we refresh the tasks
 				this.refreshMyTasks(target);
-				
+
 				if (changed.getChangedEntities().contains(target))
 					numberOfCyclesDistantFromFire = 0;
 				if (model.getDistance(location().getID(), target) < maxDistance) {

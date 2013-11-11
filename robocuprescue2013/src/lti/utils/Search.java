@@ -184,14 +184,13 @@ public class Search {
 		AStarEntityWrapper current = null;
 		boolean found = false;
 		
-		do {
+		do {			
 			current = open.remove(0);
 			if (isGoal(current.id, goals)) {
 				found = true;
 				break;
 			}
-			List<EntityID> neighbours = new ArrayList<EntityID>(graph.get(current));
-			Collections.shuffle(neighbours);
+			List<EntityID> neighbours = new ArrayList<EntityID>(graph.get(current.id));
 			if (neighbours.isEmpty()) {
 				continue;
 			}
@@ -200,9 +199,16 @@ public class Search {
 					AStarEntityWrapper next = new AStarEntityWrapper(neighbour, current, goals);
 					
 					int index;
-					for(index = 0; next.heuristic + next.pathCost >= open.get(index).heuristic + open.get(index).pathCost; index++);
+					for(index = 0; index < open.size() && (next.heuristic + next.pathCost >= open.get(index).heuristic + open.get(index).pathCost); index++);
 					
-					open.add(index, next);
+					if(index < open.size())
+					{
+						open.add(index, next);
+					}
+					else
+					{
+						open.add(next);
+					}
 					ancestors.put(neighbour, current.id);
 				}
 			}
@@ -256,6 +262,11 @@ public class Search {
 					this.heuristic = aux;
 				}
 			}
+		}
+		
+		public void print(int i){
+			System.out.println("A* Node" + i + ":");
+			System.out.println("Id:" + this.id + " cost:" + this.pathCost + " heuristic:" + this.heuristic);
 		}
 	}
 	
@@ -328,14 +339,14 @@ public class Search {
 		AStarEntityWrapper current = null;
 		boolean found = false;
 		
-		do {
+		do {			
 			current = open.remove(0);
 			if (isGoal(current.id, goals)) {
 				found = true;
 				break;
 			}
-			List<EntityID> neighbours = new ArrayList<EntityID>(graph.get(current));
-			Collections.shuffle(neighbours);
+			List<EntityID> neighbours = new ArrayList<EntityID>(graph.get(current.id));
+			
 			if (neighbours.isEmpty()) {
 				continue;
 			}
@@ -346,9 +357,16 @@ public class Search {
 					AStarEntityWrapper next = new AStarEntityWrapper(neighbour, current, goals);
 					
 					int index;
-					for(index = 0; next.heuristic + next.pathCost >= open.get(index).heuristic + open.get(index).pathCost; index++);
+					for(index = 0; index < open.size() && (next.heuristic + next.pathCost >= open.get(index).heuristic + open.get(index).pathCost); index++);
 					
-					open.add(index, next);
+					if(index < open.size())
+					{
+						open.add(index, next);
+					}
+					else
+					{
+						open.add(next);
+					}
 					ancestors.put(neighbour, current.id);
 				}
 			}
