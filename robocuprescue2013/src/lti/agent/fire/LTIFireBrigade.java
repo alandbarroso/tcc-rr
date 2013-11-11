@@ -63,12 +63,14 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	private Sectorization sectorization;
 	
 	private Sector sector;
+	private int numberOfCyclesDistantFromFire;
 
 	@Override
 	protected void postConnect() {
 		super.postConnect();
 		currentX = me().getX();
 		currentY = me().getY();
+		numberOfCyclesDistantFromFire = 0;
 		
 		DISTANCE_COMPARATOR = new DistanceComparator(this.getID());
 		
@@ -242,10 +244,16 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 				// Once the target is determined, we refresh the tasks
 				this.refreshMyTasks(target);
 				
+				if (changed.getChangedEntities().contains(target))
+					numberOfCyclesDistantFromFire = 0;
 				if (model.getDistance(location().getID(), target) < maxDistance) {
-					sendExtinguish(time, target, maxPower);
-					changeState(State.EXTINGUISHING_FIRE);
-					return;
+					if (!changed.getChangedEntities().contains(target))
+						numberOfCyclesDistantFromFire++;
+					if (numberOfCyclesDistantFromFire < 5) {
+						sendExtinguish(time, target, maxPower);
+						changeState(State.EXTINGUISHING_FIRE);
+						return;
+					}
 				}
 				
 				path = search.breadthFirstSearchAvoidingBlockedRoads(
@@ -433,9 +441,10 @@ public class LTIFireBrigade extends AbstractLTIAgent<FireBrigade> {
 	
 	@Override
 	protected void dropTask(int time, ChangeSet changed) {
-		if (!taskTable.containsKey(target)) {
+		if (!taskTable.containsKey(target) || numberOfCyclesDistantFromFire > 10) {
 			taskDropped = target;
 			target = null;
+			numberOfCyclesDistantFromFire = 0;
 		}
 	}
 
